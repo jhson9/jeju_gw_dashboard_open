@@ -34,6 +34,14 @@ ENV/
 # --- Claude Code 개인 설정 ---
 .claude/
 
+# --- 개인 작업 문서 (docx, pptx 등) ---
+# 외부 공개 버전이므로 docs/ 폴더의 워드/파워포인트는 GitHub에 올리지 않음
+# (마크다운 .md 가이드/CHANGELOG는 정상 포함)
+*.docx
+*.pptx
+*.doc
+*.ppt
+
 # --- OS 특정 파일 ---
 .DS_Store          # macOS
 Thumbs.db          # Windows
