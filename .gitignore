@@ -31,6 +31,9 @@ ENV/
 .vscode/
 *.code-workspace
 
+# --- Claude Code 개인 설정 ---
+.claude/
+
 # --- OS 특정 파일 ---
 .DS_Store          # macOS
 Thumbs.db          # Windows
