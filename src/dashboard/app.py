@@ -33,6 +33,7 @@ from src.dashboard.tabs import (
     tab1_watershed,
     tab2_rainfall,
     tab3_gwlevel,
+    tab_report,   # 외부 배포 버전: 데이터 관리 빼고 리포트 기능만 분리
     # tab4_admin은 외부 배포 버전에서 제외 (관리자 전용 기능)
 )
 
@@ -206,13 +207,14 @@ st.markdown("""
 
 
 # ==============================================================================
-#  탭 구조 (4개) — 외부 배포 버전: 관리자 탭(⚙️) 제외
+#  탭 구조 (5개) — 외부 배포 버전: 관리자 탭(⚙️) 제외, 리포트 탭(🧾)만 유지
 # ==============================================================================
 tab_names = [
     "📋 대시보드 요약",
     "① 유역별 현황",
     "② 강수량 분석",
     "③ 지하수위 분석",
+    "🧾 분석 리포트",
 ]
 tabs = st.tabs(tab_names)
 
@@ -277,6 +279,14 @@ with tabs[2]:
 
 with tabs[3]:
     tab3_gwlevel.render(ws_data_all, periods, asos_df=asos_df)
+
+with tabs[4]:
+    tab_report.render(
+        asos_df, ws_data_all, periods,
+        rainfall_table=rainfall_table,
+        eff_table=eff_table,
+        gw_summary_df=gw_summary_df,
+    )
 
 
 # ==============================================================================
