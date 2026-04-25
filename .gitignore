@@ -1,0 +1,63 @@
+# ==============================================================================
+#  .gitignore - Git 버전관리에서 제외할 파일/폴더 목록
+# ==============================================================================
+#  【이 파일의 역할】
+#  Git으로 버전관리를 할 때, 여기에 적힌 파일들은 추적하지 않습니다.
+#  비밀 정보(API 키) 유출 방지, 용량 큰 데이터 파일 제외, OS 특정 파일 무시 등.
+# ==============================================================================
+
+# --- 비밀 정보 (절대 Git에 올리면 안 됨!) ---
+.env
+*.env
+!.env.example
+
+# --- Python 캐시 및 컴파일 파일 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# --- 가상환경 ---
+venv/
+env/
+ENV/
+.venv/
+
+# --- VS Code 개인 설정 ---
+.vscode/
+*.code-workspace
+
+# --- OS 특정 파일 ---
+.DS_Store          # macOS
+Thumbs.db          # Windows
+desktop.ini
+
+# --- 데이터 파일 ---
+# 외부 배포 버전(jeju_gw_dashboard_open)에서는 데이터를 GitHub에 포함시켜야
+# Streamlit Cloud에서 읽을 수 있으므로, 아래 제외 규칙은 주석 처리합니다.
+# (PC 개발 버전에서는 다시 활성화하세요.)
+# data/ASOS/*.csv
+# data/GWlevel/by_station/*.csv
+# data/GWlevel/by_watershed/*.csv
+# data/Row_Data/*.xls
+# data/Row_Data/*.xlsx
+# data/*.xlsx
+# *.xlsx
+# 단, 빈 .gitkeep 은 유지
+!.gitkeep
+
+# --- Streamlit 캐시 ---
+.streamlit/secrets.toml
+
+# --- 로그 파일 ---
+*.log
+logs/
+
+# --- 임시 파일 ---
+*.tmp
+*.bak
+~$*
