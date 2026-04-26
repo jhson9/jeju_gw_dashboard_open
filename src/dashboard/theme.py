@@ -132,8 +132,8 @@ GLOBAL_CSS = """
   }
   /* pill 본체 — 14개 유역이 한 줄에 들어오도록 폭 축소 */
   div[data-testid="stRadio"] [role="radiogroup"] label {
-    flex: 1 1 68px !important;
-    min-width: 68px !important;
+    flex: 1 1 60px !important;
+    min-width: 60px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
