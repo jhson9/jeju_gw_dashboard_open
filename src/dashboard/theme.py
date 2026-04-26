@@ -125,15 +125,15 @@ GLOBAL_CSS = """
   }
   div[data-testid="stRadio"] [role="radiogroup"] {
     display: flex !important;
-    gap: 6px !important;
+    gap: 5px !important;
     flex-wrap: wrap !important;          /* 폭 부족 시 자연스럽게 줄바꿈(예외용 폴백) */
     justify-content: center !important;  /* 가로 중앙 정렬 */
     width: 100% !important;
   }
   /* pill 본체 — 14개 유역이 한 줄에 들어오도록 폭 축소 */
   div[data-testid="stRadio"] [role="radiogroup"] label {
-    flex: 1 1 75px !important;
-    min-width: 75px !important;
+    flex: 1 1 68px !important;
+    min-width: 68px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -141,7 +141,7 @@ GLOBAL_CSS = """
     background: #f5f5f3 !important;
     border: 0.5px solid rgba(26,26,24,0.15) !important;
     border-radius: 24px !important;
-    padding: 12px 8px !important;        /* 좌우 패딩 축소(10→8) */
+    padding: 12px 7px !important;        /* 좌우 패딩 축소(10→7) */
     margin: 0 !important;
     cursor: pointer !important;
     transition: all .15s !important;
