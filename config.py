@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 #  빌드 버전 (대시보드 푸터에 표시)
 #  수정 때마다 0.01 씩 증가시킵니다.
 # ------------------------------------------------------------------------------
-BUILD_VERSION = "1.0.37"
+BUILD_VERSION = "1.2.07"
 
 # ------------------------------------------------------------------------------
 #  .env 파일 로드 (API 키 등 비밀 정보)
@@ -48,9 +48,14 @@ PROJECT_ROOT = Path(__file__).parent.resolve()  # 프로젝트 최상위 폴더
 
 DATA_DIR = PROJECT_ROOT / "data"                # 전체 데이터 저장 폴더
 ASOS_DIR = DATA_DIR / "ASOS"                    # 기상 데이터 CSV 저장 위치
-GW_STATION_DIR = DATA_DIR / "GWlevel" / "by_station"     # 관측소별 S11 CSV
-GW_WATERSHED_DIR = DATA_DIR / "GWlevel" / "by_watershed" # 수역별 월별 CSV
-ROW_DATA_DIR = DATA_DIR / "Row_Data"            # 사용자가 xls 원본을 넣는 곳
+# 🆕 Build 1.2.01: 월별/일별 분리. 레거시 by_station 도 폴백으로 유지.
+GW_STATION_DIR       = DATA_DIR / "GWlevel" / "by_station"        # (레거시) 월별
+GW_STATION_MONTH_DIR = DATA_DIR / "GWlevel" / "by_station_month"  # 월별 (정규)
+GW_STATION_DAY_DIR   = DATA_DIR / "GWlevel" / "by_station_day"    # 일별 (신규)
+GW_WATERSHED_DIR     = DATA_DIR / "GWlevel" / "by_watershed"      # 수역별 월별 CSV
+ROW_DATA_DIR         = DATA_DIR / "Row_Data"            # xls 원본 루트(레거시)
+ROW_DATA_MONTH_DIR   = ROW_DATA_DIR / "Month"           # 월별 원본
+ROW_DATA_DAY_DIR     = ROW_DATA_DIR / "Day"             # 일별 원본 (HTML-disguised .xls)
 
 # JD관측망 정보 파일 (업로드한 엑셀)
 # 🆕 Build 0.7: 탐색 우선순위를 data/ 폴더 중심으로 변경.
@@ -78,6 +83,17 @@ if not KMA_API_KEY:
     try:
         import streamlit as st
         KMA_API_KEY = st.secrets.get("KMA_API_KEY", "")
+    except Exception:
+        pass
+
+# 🆕 Build 1.2.01: V-World 2D 지도 API 키 (공간 분석 탭용).
+#   동일한 우선순위: .env → Streamlit Cloud Secrets.
+#   미설정 시 OpenStreetMap + ESRI 위성으로 자동 폴백.
+VWORLD_API_KEY = os.getenv("VWORLD_API_KEY", "")
+if not VWORLD_API_KEY:
+    try:
+        import streamlit as st
+        VWORLD_API_KEY = st.secrets.get("VWORLD_API_KEY", "")
     except Exception:
         pass
 # 🆕 Build 0.3: HTTPS 전환 (공공데이터포털이 2024년부터 HTTPS 강제)
@@ -219,8 +235,10 @@ def ensure_directories():
     필수 디렉토리들이 없으면 자동으로 생성합니다.
     프로그램 최초 실행 시 호출됩니다.
     """
-    for d in [DATA_DIR, ASOS_DIR, GW_STATION_DIR,
-              GW_WATERSHED_DIR, ROW_DATA_DIR]:
+    for d in [DATA_DIR, ASOS_DIR,
+              GW_STATION_DIR, GW_STATION_MONTH_DIR, GW_STATION_DAY_DIR,
+              GW_WATERSHED_DIR,
+              ROW_DATA_DIR, ROW_DATA_MONTH_DIR, ROW_DATA_DAY_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
 

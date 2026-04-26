@@ -31,3 +31,9 @@ python-dotenv>=1.0.0
 
 # --- 진행률 표시 (터미널에서 다운로드 진행바) ---
 tqdm>=4.66.0
+
+# --- 지도 (V-World / OSM) ---  Build 1.2.01
+folium>=0.20.0
+streamlit-folium>=0.27.0
+lxml>=4.9.0          # 지하수위 일자료 HTML(.xls) 파싱용
+pyproj>=3.6.0        # TM좌표 → WGS84 변환

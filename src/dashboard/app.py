@@ -2,8 +2,8 @@
 #  제주도 지하수위·강수량 분석 대시보드
 #  파일명: src/dashboard/app.py
 # ------------------------------------------------------------------------------
-#  Build: 1.0
-#  최종 수정일: 2026-04-22
+#  Build: 1.2.07
+#  최종 수정일: 2026-04-26
 # ------------------------------------------------------------------------------
 #  Changelog:
 #  - v0.1 ~ v0.9: (생략 - CHANGELOG.md 참조)
@@ -12,6 +12,16 @@
 #                       * 기존 HTML처럼 상단 헤더에 날짜 입력 + [분석] 버튼
 #                       * 분석 기간 배지 헤더 바로 아래 표시
 #                       * 탭 구조 유지 (5개 탭)
+#  - v1.2.07 (2026-04-26): 외부 배포 버전에 ④ 공간 분석 탭 추가 → 6개 탭.
+#                       * V-World 2D 타일 (키 있을 때) + OSM 폴백
+#                       * 관측정/AWS 마커 + 영구 라벨 + 드롭다운 양방향 연동
+#                       * 관측정: 일평균 변화 + 일강수량 (10년/시작월) + 12개월 분석
+#                       * AWS:    12개월 강수량/유효강수일수 + 10년 월별 강수
+#                       * 일자료 파서(gwlevel_day_parser): wide HTML xls→long upsert
+#                       * 디렉토리 분리: by_station_month / by_station_day
+#                                       Row_Data/Month / Row_Data/Day
+#                       * 지도 인터랙션: 휠줌 비활성, +/- 버튼만; 미터 전용 스케일
+#                       * 탭 상태 동기화 강화 (MutationObserver)
 # ==============================================================================
 
 import sys
@@ -33,7 +43,8 @@ from src.dashboard.tabs import (
     tab1_watershed,
     tab2_rainfall,
     tab3_gwlevel,
-    tab_report,   # 외부 배포 버전: 데이터 관리 빼고 리포트 기능만 분리
+    tab5_map,    # ④ 공간 분석 (Build 1.2.07 신규)
+    tab_report,  # 외부 배포 버전: 데이터 관리 빼고 리포트 기능만 분리
     # tab4_admin은 외부 배포 버전에서 제외 (관리자 전용 기능)
 )
 
@@ -193,12 +204,12 @@ badge_html += (
 )
 st.markdown(badge_html, unsafe_allow_html=True)
 
-# 데이터 및 리포트(마지막 = 5번째) 탭이 활성화되면 분석 기간 박스 영역 숨김
+# 리포트(마지막 = 6번째) 탭이 활성화되면 분석 기간 박스 영역 숨김
 # (CSS :has 셀렉터로 stTabs 의 마지막 탭 aria-selected 상태를 감지)
 st.markdown("""
 <style>
-  /* 5개 탭 중 마지막 탭이 선택되면 #period-info-block 숨김 */
-  body:has(.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(5)[aria-selected="true"])
+  /* 6개 탭 중 마지막(분석 리포트) 탭이 선택되면 #period-info-block 숨김 */
+  body:has(.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(6)[aria-selected="true"])
     #period-info-block {
     display: none !important;
   }
@@ -207,15 +218,35 @@ st.markdown("""
 
 
 # ==============================================================================
-#  탭 구조 (5개) — 외부 배포 버전: 관리자 탭(⚙️) 제외, 리포트 탭(🧾)만 유지
+#  탭 구조 (6개) — 외부 배포 버전: 관리자 탭(⚙️) 제외, 리포트 탭(🧾)만 유지
+#  v1.2.07: ④ 공간 분석 탭 추가
 # ==============================================================================
 tab_names = [
     "📋 대시보드 요약",
     "① 유역별 현황",
     "② 강수량 분석",
     "③ 지하수위 분석",
+    "④ 공간 분석",
     "🧾 분석 리포트",
 ]
+# v1.2.03: 탭 목록 폭을 화면의 ~2/3 로 축약 + 중앙 정렬, 모든 탭 동일 폭
+st.markdown("""
+<style>
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px !important;
+    max-width: 67% !important;
+    margin: 0 auto !important;
+    justify-content: center !important;
+}
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"] {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    text-align: center !important;
+    justify-content: center !important;
+    font-size: 14px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 tabs = st.tabs(tab_names)
 
 # ------------------------------------------------------------------
@@ -281,6 +312,9 @@ with tabs[3]:
     tab3_gwlevel.render(ws_data_all, periods, asos_df=asos_df)
 
 with tabs[4]:
+    tab5_map.render(asos_df, periods, base_date=BASE_DATE)
+
+with tabs[5]:
     tab_report.render(
         asos_df, ws_data_all, periods,
         rainfall_table=rainfall_table,
@@ -304,10 +338,12 @@ _components.html("""
   const doc = window.parent.document;
 
   function setup() {
+    const tablist = doc.querySelector('.stTabs [data-baseweb="tab-list"]');
     const tabs = doc.querySelectorAll('.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]');
-    if (!tabs.length) { setTimeout(setup, 80); return; }
+    if (!tabs.length || !tablist) { setTimeout(setup, 80); return; }
 
-    // 1) 저장된 인덱스로 복원
+    // 1) 저장된 인덱스로 복원 — 탭 안에서 button/selectbox/map-click 등으로
+    //    rerun 발생 시 Streamlit 이 첫 탭(0)으로 되돌리는 문제 방지.
     const saved = window.parent.sessionStorage.getItem(KEY);
     if (saved !== null) {
       const idx = parseInt(saved, 10);
@@ -319,7 +355,7 @@ _components.html("""
       }
     }
 
-    // 2) 사용자가 직접 탭을 누르면 sessionStorage 에 기록
+    // 2) 사용자 클릭 시 즉시 기록
     tabs.forEach((tab, i) => {
       if (tab.dataset.jejuTabSync) return;
       tab.dataset.jejuTabSync = '1';
@@ -327,6 +363,24 @@ _components.html("""
         window.parent.sessionStorage.setItem(KEY, String(i));
       });
     });
+
+    // 3) aria-selected 변화도 감지 (프로그램적 탭 전환 포함) → sessionStorage 동기화
+    if (!tablist.dataset.jejuObserver) {
+      tablist.dataset.jejuObserver = '1';
+      const obs = new MutationObserver(() => {
+        const liveTabs = doc.querySelectorAll(
+          '.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]'
+        );
+        const activeIdx = Array.from(liveTabs).findIndex(
+          t => t.getAttribute('aria-selected') === 'true'
+        );
+        if (activeIdx >= 0) {
+          window.parent.sessionStorage.setItem(KEY, String(activeIdx));
+        }
+      });
+      tabs.forEach(t => obs.observe(t,
+        { attributes: true, attributeFilter: ['aria-selected'] }));
+    }
   }
   setup();
 })();

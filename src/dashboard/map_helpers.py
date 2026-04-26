@@ -1,0 +1,379 @@
+# ==============================================================================
+#  파일명: src/dashboard/map_helpers.py
+#  Build 1.2.05 — 지도(V-World) 헬퍼 + 관측정/AWS 좌표 정규화
+# ------------------------------------------------------------------------------
+#  주요 기능:
+#  1) 0_JD관측망_정보.xlsx 로드 → 위도/경도(WGS84) 정규화 (DMS·TM 혼재 대응)
+#  2) Folium 지도 생성: V-World 타일 (키 있을 때) + OSM/위성 폴백
+#     - 마우스 휠 줌 비활성, +/- 버튼만 사용 (요청 1)
+#     - 미터 전용 스케일 바 + 3배 확대 (요청 5)
+#  3) 관측정/AWS 마커: 영구 라벨 표시 + AWS는 사각형 2배 (요청 2·3·4)
+# ==============================================================================
+
+from __future__ import annotations
+
+import re
+from functools import lru_cache
+from pathlib import Path
+
+import pandas as pd
+import folium
+from branca.element import MacroElement
+from jinja2 import Template
+
+import config
+
+
+# ==============================================================================
+#  ■ 1. AWS 좌표 (기상청 ASOS 공개 좌표)
+# ==============================================================================
+AWS_COORDS = {
+    # 지점명: (위도, 경도)
+    "제주":   (33.5141, 126.5297),   # 184
+    "서귀포": (33.2461, 126.5653),   # 189
+    "성산":   (33.3868, 126.8801),   # 188
+    "고산":   (33.2937, 126.1626),   # 185
+}
+
+
+# ==============================================================================
+#  ■ 2. 좌표 변환 유틸
+# ==============================================================================
+def _parse_dms(text: str) -> float | None:
+    """'126 32 43.688' → 126.5454 (decimal degrees)."""
+    if not isinstance(text, str):
+        return None
+    m = re.match(r"^\s*(\d+)\s+(\d+)\s+([\d\.]+)\s*$", text)
+    if not m:
+        return None
+    deg, mn, sec = float(m.group(1)), float(m.group(2)), float(m.group(3))
+    return deg + mn / 60.0 + sec / 3600.0
+
+
+def _tm_to_wgs84(x: float, y: float) -> tuple[float | None, float | None]:
+    """EPSG:5186(중부원점 TM) → WGS84 (lat, lon). 실패 시 (None,None)."""
+    try:
+        from pyproj import Transformer
+        # 한국 통합 TM(EPSG:5186, 중부원점)
+        tr = _get_tm_transformer()
+        lon, lat = tr.transform(x, y)
+        return float(lat), float(lon)
+    except Exception:
+        return None, None
+
+
+@lru_cache(maxsize=1)
+def _get_tm_transformer():
+    from pyproj import Transformer
+    return Transformer.from_crs("EPSG:5186", "EPSG:4326", always_xy=True)
+
+
+# ==============================================================================
+#  ■ 3. 관측정 메타 로드 (위도·경도 정규화 포함)
+# ==============================================================================
+@lru_cache(maxsize=1)
+def load_station_meta() -> pd.DataFrame:
+    """
+    0_JD관측망_정보.xlsx 를 로드하고 'lat', 'lon' 컬럼(WGS84 십진수)을 추가.
+
+    원본 컬럼:
+      관측소명, 허가번호, 표고 TOC(m), 표고 BOC(m), 케이싱 구경, 관정심도(m),
+      운영현황, 공개수준, 지하수 용도, 유역구분, 유역명, X, Y, 위도, 경도, 위치
+
+    원본 파일의 '위도' 컬럼에는 longitude DMS("126 32 43.688") 가,
+    '경도' 컬럼에는 latitude DMS("33 29 35.815") 가 들어있는 경우가 다수.
+    일부 행은 X·Y 와 동일한 TM 수치가 위도·경도에 들어있기도 함.
+    아래 로직이 두 케이스 모두 처리.
+    """
+    p = config.find_jd_network_file()
+    if p is None:
+        return pd.DataFrame()
+
+    df = pd.read_excel(p)
+    if "관측소명" not in df.columns:
+        return pd.DataFrame()
+
+    lats, lons = [], []
+    for _, row in df.iterrows():
+        v_wido = row.get("위도")
+        v_gyeong = row.get("경도")
+        x_tm = row.get("X")
+        y_tm = row.get("Y")
+
+        lat = lon = None
+
+        # ① DMS 문자열 케이스: 위도 컬럼에 longitude, 경도 컬럼에 latitude
+        wido_dms = _parse_dms(str(v_wido)) if isinstance(v_wido, str) else None
+        gy_dms   = _parse_dms(str(v_gyeong)) if isinstance(v_gyeong, str) else None
+        if wido_dms is not None and gy_dms is not None:
+            # 한국 위도는 33~38, 경도는 124~132
+            if 124 <= wido_dms <= 132 and 33 <= gy_dms <= 38:
+                lon, lat = wido_dms, gy_dms
+            elif 33 <= wido_dms <= 38 and 124 <= gy_dms <= 132:
+                lat, lon = wido_dms, gy_dms
+
+        # ② TM 수치 케이스: X/Y → WGS84
+        if (lat is None or lon is None) and pd.notna(x_tm) and pd.notna(y_tm):
+            try:
+                xv, yv = float(x_tm), float(y_tm)
+                if 100000 < xv < 250000 and 50000 < yv < 150000:
+                    lat, lon = _tm_to_wgs84(xv, yv)
+            except (ValueError, TypeError):
+                pass
+
+        lats.append(lat); lons.append(lon)
+
+    df["lat"] = lats
+    df["lon"] = lons
+    return df
+
+
+# ==============================================================================
+#  ■ 4. Folium 지도 생성
+# ==============================================================================
+class _MetricScale(MacroElement):
+    """미터 단위 전용, 더 넓게 보이는 maxWidth 의 스케일 바."""
+    _template = Template("""
+        {% macro script(this, kwargs) %}
+            L.control.scale({
+                imperial: false,
+                metric: true,
+                maxWidth: 280,
+                position: 'bottomleft',
+                updateWhenIdle: true
+            }).addTo({{ this._parent.get_name() }});
+        {% endmacro %}
+    """)
+
+
+# 지도/마커/스케일 일괄 CSS — Folium 의 <head> 에 주입.
+_MAP_CSS = """
+<style>
+/* (요청 5) 스케일 바 ~3배 확대 + 미터 단위만 */
+.leaflet-control-scale-line {
+    font-size: 16px !important;
+    line-height: 22px !important;
+    height: 26px !important;
+    border-width: 3px !important;
+    padding: 2px 12px !important;
+    box-sizing: border-box !important;
+    background: rgba(255,255,255,0.85) !important;
+    color: #1a1a18 !important;
+    font-weight: 600 !important;
+}
+.leaflet-control-scale {
+    margin: 8px 12px !important;
+}
+
+/* (요청 2·3) 영구 라벨 - 관측정 */
+.leaflet-tooltip.jeju-st-label {
+    background: rgba(255,255,255,0.85);
+    border: 0.5px solid rgba(24,95,165,0.45);
+    border-radius: 3px;
+    color: #185fa5;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.10);
+    white-space: nowrap;
+}
+.leaflet-tooltip.jeju-st-label-sel {
+    background: #e24b4a;
+    border: 1px solid #e24b4a;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.20);
+}
+/* (요청 3) 영구 라벨 - AWS */
+.leaflet-tooltip.jeju-aws-label {
+    background: rgba(255,166,74,0.95);
+    border: 0.8px solid #BA7517;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+}
+.leaflet-tooltip.jeju-aws-label-sel {
+    background: #e24b4a;
+    border: 1.5px solid #e24b4a;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 5px;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.22);
+}
+/* 화살표 색은 라벨 배경에 맞춰 자연스럽게 */
+.leaflet-tooltip.jeju-aws-label::before,
+.leaflet-tooltip.jeju-aws-label-sel::before { display: none; }
+.leaflet-tooltip.jeju-st-label::before,
+.leaflet-tooltip.jeju-st-label-sel::before { display: none; }
+</style>
+"""
+
+
+def make_map(center: tuple[float, float] = (33.38, 126.55),
+             zoom: int = 10) -> folium.Map:
+    """
+    제주 중심의 Folium 지도 + 베이스맵 레이어.
+
+    v1.2.05:
+    - 마우스 휠/더블클릭 줌 비활성화, +/- 버튼만 (요청 1)
+    - 드래그(panning)는 유지
+    - 미터 전용 스케일 바, 3배 확대 (요청 5)
+    """
+    m = folium.Map(
+        location=list(center), zoom_start=zoom,
+        tiles=None,                      # 직접 레이어 추가
+        control_scale=False,             # 기본 스케일 끄고 커스텀 사용
+        # 줌 인터랙션 (요청 1)
+        scrollWheelZoom=False,
+        doubleClickZoom=False,
+        touchZoom=False,
+        boxZoom=False,
+        zoomControl=True,                # +/- 버튼은 유지
+        dragging=True,                   # 드래그 패닝은 유지
+    )
+
+    # 커스텀 스케일 + 마커/스케일 CSS 일괄 주입
+    m.get_root().header.add_child(folium.Element(_MAP_CSS))
+    m.add_child(_MetricScale())
+
+    key = (config.VWORLD_API_KEY or "").strip()
+    if key:
+        # V-World WMTS 타일 (사용자 키)
+        base_url = f"https://api.vworld.kr/req/wmts/1.0.0/{key}"
+        attr = "ⓒ V-World"
+        folium.TileLayer(
+            tiles=f"{base_url}/Base/{{z}}/{{y}}/{{x}}.png",
+            attr=attr, name="V-World 일반", overlay=False, control=True,
+            max_zoom=19,
+        ).add_to(m)
+        folium.TileLayer(
+            tiles=f"{base_url}/Satellite/{{z}}/{{y}}/{{x}}.jpeg",
+            attr=attr, name="V-World 위성", overlay=False, control=True,
+            max_zoom=19,
+        ).add_to(m)
+        folium.TileLayer(
+            tiles=f"{base_url}/Hybrid/{{z}}/{{y}}/{{x}}.png",
+            attr=attr, name="V-World 하이브리드", overlay=True, control=True,
+            max_zoom=19,
+        ).add_to(m)
+        folium.TileLayer(
+            tiles=f"{base_url}/gray/{{z}}/{{y}}/{{x}}.png",
+            attr=attr, name="V-World 흑백", overlay=False, control=True,
+            max_zoom=19,
+        ).add_to(m)
+    else:
+        # 폴백: OSM + ESRI 위성
+        folium.TileLayer(
+            "OpenStreetMap", name="일반지도 (OSM)",
+            overlay=False, control=True
+        ).add_to(m)
+        folium.TileLayer(
+            tiles=("https://server.arcgisonline.com/ArcGIS/rest/services/"
+                   "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
+            attr="ⓒ Esri", name="위성 (Esri)",
+            overlay=False, control=True, max_zoom=19,
+        ).add_to(m)
+
+    # 요청 3: 위·아래 펼쳐지지 않고 접힌 상태로 유지 → 클릭 시에만 목록 노출
+    folium.LayerControl(collapsed=True, position="topright").add_to(m)
+    return m
+
+
+def add_station_markers(m: folium.Map, station_df: pd.DataFrame,
+                        selected: str | None = None) -> None:
+    """관측정 마커(파랑 ●). selected 일치 시 빨간 ★ 강조.
+
+    v1.2.05: 모든 관측정 이름을 영구 라벨로 표시 (요청 2).
+    """
+    for _, r in station_df.iterrows():
+        if pd.isna(r.get("lat")) or pd.isna(r.get("lon")):
+            continue
+        name = r["관측소명"]
+        is_sel = (name == selected)
+        ws = r.get("유역명", "")
+        popup = (
+            f'<div style="font-size:12px;line-height:1.4;">'
+            f'<b style="font-size:13px;">{name}</b><br>'
+            f'유역: {ws}<br>'
+            f'표고 TOC: {r.get("표고 TOC(m)", "-")} m<br>'
+            f'관정심도: {r.get("관정심도(m)", "-")} m<br>'
+            f'운영현황: {r.get("운영현황", "-")}'
+            f'</div>'
+        )
+        # 영구 라벨 (요청 2): direction=right 로 마커 우측에 노출
+        if is_sel:
+            label = folium.Tooltip(
+                f"★ {name}", permanent=True, direction="right",
+                offset=(10, 0), sticky=False,
+                class_name="jeju-st-label-sel",
+            )
+            folium.CircleMarker(
+                location=[r["lat"], r["lon"]],
+                radius=10, color="#e24b4a", weight=3,
+                fill=True, fill_color="#ffd1d0", fill_opacity=0.9,
+                tooltip=label,
+                popup=folium.Popup(popup, max_width=240),
+            ).add_to(m)
+        else:
+            label = folium.Tooltip(
+                name, permanent=True, direction="right",
+                offset=(7, 0), sticky=False,
+                class_name="jeju-st-label",
+            )
+            folium.CircleMarker(
+                location=[r["lat"], r["lon"]],
+                radius=5, color="#185fa5", weight=1.5,
+                fill=True, fill_color="#378ADD", fill_opacity=0.85,
+                tooltip=label,
+                popup=folium.Popup(popup, max_width=240),
+            ).add_to(m)
+
+
+def add_aws_markers(m: folium.Map, selected: str | None = None) -> None:
+    """AWS 4개 마커.
+
+    v1.2.05:
+    - (요청 4) 사각형 (number_of_sides=4, rotation=45) 으로 변경, 크기 ~2배
+    - (요청 3) 지점명 영구 라벨 노출
+    """
+    for s in config.STATIONS_ASOS:
+        nm = s["name"]
+        coord = AWS_COORDS.get(nm)
+        if not coord:
+            continue
+        is_sel = (nm == selected)
+        popup = (
+            f'<div style="font-size:12px;line-height:1.4;">'
+            f'<b style="font-size:13px;color:{s["color"]};">{nm} AWS</b><br>'
+            f'지점코드: {s["id"]}<br>'
+            f'위도: {coord[0]:.4f}, 경도: {coord[1]:.4f}'
+            f'</div>'
+        )
+        # 사각형 (rotation=45 → 축 정렬). 크기 2배: 7→14 / 12→24
+        radius = 24 if is_sel else 14
+        weight = 3 if is_sel else 1.8
+        edge   = "#e24b4a" if is_sel else "#BA7517"
+        # 라벨: tooltip click-sync 와의 호환을 위해 텍스트는 'XXX AWS' 유지
+        label_class = "jeju-aws-label-sel" if is_sel else "jeju-aws-label"
+        label = folium.Tooltip(
+            f"{'★ ' if is_sel else ''}{nm} AWS",
+            permanent=True, direction="right",
+            offset=(radius + 4, 0), sticky=False,
+            class_name=label_class,
+        )
+        folium.RegularPolygonMarker(
+            location=list(coord),
+            number_of_sides=4, rotation=45,
+            radius=radius, color=edge, weight=weight,
+            fill=True, fill_color="#FFA64A", fill_opacity=0.92,
+            tooltip=label,
+            popup=folium.Popup(popup, max_width=220),
+        ).add_to(m)
