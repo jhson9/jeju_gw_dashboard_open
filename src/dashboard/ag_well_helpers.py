@@ -822,7 +822,8 @@ def build_search_map(
         # (시각 차이는 미미하나 클릭 정밀도 큰 개선).
         radius = 12 if is_sel else 7
         auth = r.get("authority") or ""
-        color = config.AG_PALETTE.get(auth, "#7F7F7F")
+        palette = getattr(config, "AG_PALETTE", {"seogwipo": "#C65911", "jeju": "#305496"})
+        color = palette.get(auth, "#7F7F7F")
         edge  = "#C00000" if is_sel else color
 
         # 2줄 구성: 관정명(굵게) / 읍면 리
@@ -1157,7 +1158,7 @@ def render_well_count_table(df: pd.DataFrame) -> None:
     grand = jeju_sub + seog_sub
 
     # 기준연도 — config 의 농업용 관정 사후관리 자료 마지막 연도
-    base_year = config.AG_USAGE_YEAR_RANGE[1]
+    base_year = getattr(config, "AG_USAGE_YEAR_RANGE", (2017, 2025))[1]
 
     def _render_one(
         si: str, columns: list[str], subtotal: int,
