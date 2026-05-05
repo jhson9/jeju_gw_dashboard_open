@@ -135,9 +135,9 @@ section.main > div.block-container {
 }
 
 /* ─── 모바일 반응형 ──────────────────────────────────────────────────────
- * max-width: 768px 이하에서 적용 (태블릿/폰)
+ * max-width: 960px 이하에서 적용 (태블릿/폰)
  */
-@media (max-width: 768px) {
+@media (max-width: 960px) {
     /* 헤더 행 반응형: 날짜 입력 + 버튼을 세로 스택 */
     .stColumns > div:has([data-testid*="selectbox"]) {
         flex-direction: column !important;
