@@ -273,7 +273,13 @@ def _monthly_avg_rainfall(asos_df: pd.DataFrame, year: int) -> pd.DataFrame:
 # ------------------------------------------------------------------------------
 #  ■ render
 # ------------------------------------------------------------------------------
-def render(asos_df: pd.DataFrame | None = None) -> None:
+def render(
+    ag_master_df: pd.DataFrame | None = None,
+    ag_usage_df: pd.DataFrame | None = None,
+    ag_wq_df: pd.DataFrame | None = None,
+    periods: dict | None = None,
+    asos_df: pd.DataFrame | None = None,
+) -> None:
     st.markdown(
         '<h2 style="font-size:22px;font-weight:500;margin:0 0 6px;padding:0;'
         'color:#1a1a18;line-height:1.2;">'
@@ -281,10 +287,10 @@ def render(asos_df: pd.DataFrame | None = None) -> None:
         unsafe_allow_html=True,
     )
 
-    df_master_all = ag_well_loader.load_master(active_only=False)
-    df_master_act = ag_well_loader.load_master(active_only=True)
-    df_usage      = ag_well_loader.load_usage_long()
-    df_qual       = ag_well_loader.load_quality_semiannual()
+    df_master_all = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=False)
+    df_master_act = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=True)
+    df_usage      = ag_usage_df if ag_usage_df is not None else ag_well_loader.load_usage_long()
+    df_qual       = ag_wq_df if ag_wq_df is not None else ag_well_loader.load_quality_semiannual()
 
     if df_master_all.empty:
         st.warning("관정 마스터 자료를 찾을 수 없습니다.")

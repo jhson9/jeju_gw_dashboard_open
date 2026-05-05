@@ -192,7 +192,13 @@ def _stats_title_scope(level: str, loc_sel: dict) -> str:
 
 
 @st.fragment
-def render() -> None:
+def render(
+    ag_master_df: pd.DataFrame | None = None,
+    ag_usage_df: pd.DataFrame | None = None,
+    ag_wq_df: pd.DataFrame | None = None,
+    periods: dict | None = None,
+    asos_df: pd.DataFrame | None = None,
+) -> None:
     st.markdown(
         '<h2 style="font-size:22px;font-weight:500;margin:0 0 6px;padding:0;'
         'color:#1a1a18;line-height:1.2;">'
@@ -200,8 +206,8 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
-    df_master = ag_well_loader.load_master(active_only=True)
-    df_usage = ag_well_loader.load_usage_long()
+    df_master = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=True)
+    df_usage = ag_usage_df if ag_usage_df is not None else ag_well_loader.load_usage_long()
 
     if df_usage.empty:
         st.warning("이용량 자료를 찾을 수 없습니다 (usage/usage_montly_*.csv).")

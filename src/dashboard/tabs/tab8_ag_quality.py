@@ -568,7 +568,13 @@ def _yh_period_label(lo: tuple[int, str], hi: tuple[int, str]) -> str:
 #  메인 render
 # ==============================================================================
 @st.fragment
-def render() -> None:
+def render(
+    ag_master_df: pd.DataFrame | None = None,
+    ag_usage_df: pd.DataFrame | None = None,
+    ag_wq_df: pd.DataFrame | None = None,
+    periods: dict | None = None,
+    asos_df: pd.DataFrame | None = None,
+) -> None:
     st.markdown(
         '<h2 style="font-size:22px;font-weight:500;margin:0 0 6px;padding:0;'
         'color:#1a1a18;line-height:1.2;">'
@@ -576,8 +582,8 @@ def render() -> None:
         unsafe_allow_html=True,
     )
 
-    df_master = ag_well_loader.load_master(active_only=False)
-    df_qual   = ag_well_loader.load_quality_semiannual()
+    df_master = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=False)
+    df_qual   = ag_wq_df if ag_wq_df is not None else ag_well_loader.load_quality_semiannual()
 
     if df_qual.empty:
         st.warning(
