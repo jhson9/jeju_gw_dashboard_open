@@ -2,8 +2,8 @@
 #  제주도 지하수위·강수량 분석 대시보드
 #  파일명: src/dashboard/app.py
 # ------------------------------------------------------------------------------
-#  Build: 1.2.07
-#  최종 수정일: 2026-04-26
+#  Build: 1.2.09
+#  최종 수정일: 2026-05-05
 # ------------------------------------------------------------------------------
 #  Changelog:
 #  - v0.1 ~ v0.9: (생략 - CHANGELOG.md 참조)
@@ -22,11 +22,35 @@
 #                                       Row_Data/Month / Row_Data/Day
 #                       * 지도 인터랙션: 휠줌 비활성, +/- 버튼만; 미터 전용 스케일
 #                       * 탭 상태 동기화 강화 (MutationObserver)
+#  - v1.2.08 (2026-05-05): ⑤ 농업용 관정 분석 탭 추가 → 7개 탭.
+#                       * 제주시·서귀포시 사후관리 DB 활용
+#                       * 관정 기본 현황, 위치 분석, 사용량 분석, 수질 분석
+#  - v1.2.09 (2026-05-05): 농업용 관정 분석 세분화 → 10개 탭.
+#                       * ⑤ 관정 검색, ⑥ 이용량 분석, ⑦ 수질 분석, ⑧ 통계·요약
+#                       * 타이틀: "제주도 농업용 지하수 분석 대시보드"
 # ==============================================================================
 
+import logging
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+# Streamlit fragment-id stale 로그 억제
+class _FragmentNoiseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+        return "Couldn't find fragment with id" not in msg
+
+for _name in (
+    "streamlit",
+    "streamlit.runtime",
+    "streamlit.runtime.scriptrunner",
+    "streamlit.runtime.fragment",
+):
+    logging.getLogger(_name).addFilter(_FragmentNoiseFilter())
 
 from calendar import monthrange
 from datetime import date, timedelta
@@ -36,7 +60,7 @@ import pandas as pd
 
 import config
 from src.collectors import asos_collector
-from src.analysis import period_calculator, watershed_mapper, effective_rainfall
+from src.analysis import period_calculator, watershed_mapper, effective_rainfall, ag_well_loader
 from src.dashboard import theme
 from src.dashboard.tabs import (
     tab0_overview,
@@ -44,6 +68,10 @@ from src.dashboard.tabs import (
     tab2_rainfall,
     tab3_gwlevel,
     tab5_map,    # ④ 공간 분석 (Build 1.2.07 신규)
+    tab6_ag_search,  # ⑤ 관정 검색 (Build 1.2.09 신규)
+    tab7_ag_usage,   # ⑥ 이용량 분석 (Build 1.2.09 신규)
+    tab8_ag_quality, # ⑦ 수질 분석 (Build 1.2.09 신규)
+    tab9_ag_stats,   # ⑧ 통계·요약 (Build 1.2.09 신규)
     tab_report,  # 외부 배포 버전: 데이터 관리 빼고 리포트 기능만 분리
     # tab4_admin은 외부 배포 버전에서 제외 (관리자 전용 기능)
 )
@@ -53,7 +81,7 @@ from src.dashboard.tabs import (
 #  페이지 설정
 # ==============================================================================
 st.set_page_config(
-    page_title="제주도 지하수위·강수량 대시보드",
+    page_title="제주도 농업용 지하수 분석 대시보드",
     page_icon="🌊",
     layout="wide",
     initial_sidebar_state="collapsed",   # 사이드바 숨김
@@ -66,12 +94,42 @@ st.markdown("""
 /* 사이드바 완전 숨김 */
 section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"]  { display: none !important; }
-/* 최상단 공백 최소화 — Streamlit 기본 헤더/툴바/패딩 제거 */
-[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {
-    display: none !important; height: 0 !important;
+
+/* ─── 최상단 공백 0 처리 ───────────────────────────────────────────
+ * Streamlit 의 기본 상단 영역(헤더·툴바·데코·iframe 빈공간)을 모두 제거.
+ * .block-container 의 padding-top 이 가장 큰 여백 — 0 으로.
+ * margin-top 도 0 으로 강제 (Streamlit 기본 ~6rem 마진 우회).
+ */
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"] {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    visibility: hidden !important;
 }
-.main .block-container { padding-top: 0.5rem !important; }
-[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
+
+.main .block-container,
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stMain"] .block-container,
+section.main > div.block-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"] {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* 첫 자식 요소도 마진 제거 — 일부 위젯이 자체 마진 가짐 */
+.block-container > div:first-child,
+.block-container > div:first-child > div:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,6 +145,13 @@ def load_asos_cached():
 def load_watersheds_cached():
     return watershed_mapper.load_watershed_data()
 
+@st.cache_data(ttl=300)
+def load_ag_well_cached():
+    master_df = ag_well_loader.load_master()
+    usage_df = ag_well_loader.load_usage_long()
+    wq_df = ag_well_loader.load_quality_semiannual()
+    return master_df, usage_df, wq_df
+
 
 # ==============================================================================
 #  헤더: 기존 HTML 대시보드와 동일한 구조
@@ -95,6 +160,7 @@ def load_watersheds_cached():
 # ==============================================================================
 asos_df     = load_asos_cached()
 ws_data_all = load_watersheds_cached()
+ag_master_df, ag_usage_df, ag_wq_df = load_ag_well_cached()
 
 today = date.today()
 DEFAULT_BASE_DATE = date(2026, 2, 1)
@@ -116,9 +182,9 @@ hcol_left, hcol_right = st.columns([1.3, 1.7])
 with hcol_left:
     st.markdown(
         '<p style="font-size:11px;color:#5f5e5a;margin:0 0 2px;letter-spacing:0.06em;">'
-        '지하수위 통합 분석 시스템 · 제주도</p>'
+        '농업용 지하수 통합 분석 시스템 · 제주도</p>'
         '<h1 style="font-size:22px;font-weight:500;margin:0;color:#1a1a18;">'
-        '🌊 제주도 지하수위·강수량 분석 대시보드</h1>',
+        '🌊 제주도 농업용 지하수 분석 대시보드</h1>',
         unsafe_allow_html=True
     )
 
@@ -204,12 +270,11 @@ badge_html += (
 )
 st.markdown(badge_html, unsafe_allow_html=True)
 
-# 리포트(마지막 = 6번째) 탭이 활성화되면 분석 기간 박스 영역 숨김
+# 리포트(마지막 = 10번째) 탭이 활성화되면 분석 기간 박스 영역 숨김
 # (CSS :has 셀렉터로 stTabs 의 마지막 탭 aria-selected 상태를 감지)
-st.markdown("""
-<style>
-  /* 6개 탭 중 마지막(분석 리포트) 탭이 선택되면 #period-info-block 숨김 */
-  body:has(.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(6)[aria-selected="true"])
+st.markdown("""<style>
+/* 10개 탭 중 마지막(분석 리포트) 탭이 선택되면 #period-info-block 숨김 */
+  body:has(.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(10)[aria-selected="true"])
     #period-info-block {
     display: none !important;
   }
@@ -218,8 +283,10 @@ st.markdown("""
 
 
 # ==============================================================================
-#  탭 구조 (6개) — 외부 배포 버전: 관리자 탭(⚙️) 제외, 리포트 탭(🧾)만 유지
+#  탭 구조 (10개) — 외부 배포 버전: 관리자 탭(⚙️) 제외, 리포트 탭(🧾)만 유지
 #  v1.2.07: ④ 공간 분석 탭 추가
+#  v1.2.08: ⑤ 농업용 관정 분석 탭 추가
+#  v1.2.09: 농업용 관정 분석 세분화 (⑤~⑧) → 총 10개 탭
 # ==============================================================================
 tab_names = [
     "📋 대시보드 요약",
@@ -227,6 +294,10 @@ tab_names = [
     "② 강수량 분석",
     "③ 지하수위 분석",
     "④ 공간 분석",
+    "⑤ 관정 검색",
+    "⑥ 이용량 분석",
+    "⑦ 수질 분석",
+    "⑧ 통계·요약",
     "🧾 분석 리포트",
 ]
 # v1.2.03: 탭 목록 폭을 화면의 ~2/3 로 축약 + 중앙 정렬, 모든 탭 동일 폭
@@ -315,6 +386,18 @@ with tabs[4]:
     tab5_map.render(asos_df, periods, base_date=BASE_DATE)
 
 with tabs[5]:
+    tab6_ag_search.render(ag_master_df, ag_usage_df, ag_wq_df, periods)
+
+with tabs[6]:
+    tab7_ag_usage.render(ag_master_df, ag_usage_df, ag_wq_df, periods, asos_df)
+
+with tabs[7]:
+    tab8_ag_quality.render(ag_master_df, ag_usage_df, ag_wq_df, periods, asos_df)
+
+with tabs[8]:
+    tab9_ag_stats.render(ag_master_df, ag_usage_df, ag_wq_df, periods, asos_df)
+
+with tabs[9]:
     tab_report.render(
         asos_df, ws_data_all, periods,
         rainfall_table=rainfall_table,

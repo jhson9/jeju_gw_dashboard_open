@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 #  빌드 버전 (대시보드 푸터에 표시)
 #  수정 때마다 0.01 씩 증가시킵니다.
 # ------------------------------------------------------------------------------
-BUILD_VERSION = "1.2.07"
+BUILD_VERSION = "1.2.09"
 
 # ------------------------------------------------------------------------------
 #  .env 파일 로드 (API 키 등 비밀 정보)
@@ -56,6 +56,44 @@ GW_WATERSHED_DIR     = DATA_DIR / "GWlevel" / "by_watershed"      # 수역별 �
 ROW_DATA_DIR         = DATA_DIR / "Row_Data"            # xls 원본 루트(레거시)
 ROW_DATA_MONTH_DIR   = ROW_DATA_DIR / "Month"           # 월별 원본
 ROW_DATA_DAY_DIR     = ROW_DATA_DIR / "Day"             # 일별 원본 (HTML-disguised .xls)
+
+# 🆕 농업용 관정 데이터 (제주시·서귀포시 사후관리 DB)
+AG_WELL_DIR             = PROJECT_ROOT / "data_ag_well"
+AG_MASTER_FILE          = AG_WELL_DIR / "master.csv"
+AG_MASTER_YEARLY_DIR    = AG_WELL_DIR / "master_yearly"
+AG_USAGE_DIR            = AG_WELL_DIR / "usage"
+AG_QUALITY_DIR          = AG_WELL_DIR / "water_quality"
+AG_QUALITY_SEMIANNUAL   = AG_QUALITY_DIR / "water_quality_semiannual.csv"
+AG_QUALITY_REGULAR      = AG_QUALITY_DIR / "water_quality_regular.csv"
+
+# 사후관리 자료 보유 연도 (실제 파일 기준; 갱신 시 자동 확장은 loader가 처리)
+AG_USAGE_YEAR_RANGE   = (2017, 2025)
+AG_QUALITY_YEAR_RANGE = (2015, 2025)
+
+# --- 사후관리: 반기 수질 5항목 기준치 (먹는물공동시설 기준) ---
+WATER_QUALITY_STANDARDS = {
+    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
+    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
+    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
+    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
+    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},  # 참고치
+}
+
+# 🆕 농업용 관정 색상 팔레트
+AG_PALETTE = {
+    "seogwipo":     "#C65911",   # 서귀포시 (관할)
+    "jeju":         "#305496",   # 제주시 (관할)
+    "agriculture":  "#548235",   # 농업용
+    "household":    "#305496",   # 생활용
+    "fisheries":    "#5B9BD5",   # 어업용
+    "industrial":   "#C00000",   # 공업용
+}
+AG_QUALITY_PALETTE = {
+    "normal":   "#548235",   # 적합
+    "exceed":   "#C00000",   # 부적합
+    "missing":  "#7F7F7F",   # 측정안됨/누락
+    "below_dl": "#9DC3E6",   # 불검출
+}
 
 # JD관측망 정보 파일 (업로드한 엑셀)
 # 🆕 Build 0.7: 탐색 우선순위를 data/ 폴더 중심으로 변경.
