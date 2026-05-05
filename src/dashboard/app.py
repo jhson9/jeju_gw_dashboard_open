@@ -152,6 +152,11 @@ def load_ag_well_cached():
     wq_df = ag_well_loader.load_quality_semiannual()
     return master_df, usage_df, wq_df
 
+# 강제 캐시 재설정: 배포 환경에서 이전 실행의 stale cache를 방지.
+load_asos_cached.clear()
+load_watersheds_cached.clear()
+load_ag_well_cached.clear()
+
 
 # ==============================================================================
 #  헤더: 기존 HTML 대시보드와 동일한 구조
