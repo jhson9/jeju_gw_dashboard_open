@@ -87,6 +87,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",   # 사이드바 숨김
 )
 
+# 모바일 반응형: viewport meta 태그 추가
+st.html('<meta name="viewport" content="width=device-width, initial-scale=1">')
+
 # 공통 CSS (사이드바 완전 숨김 포함)
 theme.apply_theme()
 st.markdown("""
@@ -129,6 +132,49 @@ section.main > div.block-container {
 .block-container > div:first-child > div:first-child {
     margin-top: 0 !important;
     padding-top: 0 !important;
+}
+
+/* ─── 모바일 반응형 ──────────────────────────────────────────────────────
+ * max-width: 768px 이하에서 적용 (태블릿/폰)
+ */
+@media (max-width: 768px) {
+    /* 헤더 행 반응형: 날짜 입력 + 버튼을 세로 스택 */
+    .stColumns > div:has([data-testid*="selectbox"]) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+    .stColumns > div:has(button) {
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    /* 탭 라벨 줄임: 텍스트 숨기고 아이콘만 표시 */
+    [data-baseweb="tab"] span {
+        display: none;
+    }
+    [data-baseweb="tab"]::before {
+        content: attr(data-baseweb);
+        display: block;
+        font-size: 16px;
+    }
+
+    /* 폰트·여백 축소: 패딩/마진 절반 */
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        font-size: 0.9em !important;
+    }
+    .stColumns {
+        gap: 0.5rem !important;
+    }
+
+    /* 표 가로 스크롤: overflow-x auto 컨테이너 */
+    .stDataFrame, .stTable {
+        overflow-x: auto !important;
+        max-width: 100% !important;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
