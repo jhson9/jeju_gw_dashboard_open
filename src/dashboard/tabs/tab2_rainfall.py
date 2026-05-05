@@ -21,7 +21,7 @@ def render(asos_df: pd.DataFrame, periods: dict):
     # 안내 캡션 제거 — 헤더/탭 자체로 의미 전달
 
     if asos_df.empty:
-        st.warning("⚠️ ASOS 데이터 없음. **⚙️ 데이터 관리** 탭에서 수집하세요.")
+        st.warning("⚠️ ASOS 강수량 데이터가 누락되어 있습니다. 관리자에게 문의해 주세요.")
         return
 
     monthly = effective_rainfall.aggregate_monthly(asos_df)

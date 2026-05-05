@@ -41,7 +41,7 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict):
     st.markdown("#### 🌧️ AWS 지점별 강수량 (M-2 · M-1 · M)")
 
     if asos_df.empty:
-        st.info("ASOS 데이터를 먼저 수집하세요. (⚙️ 데이터 관리 탭)")
+        st.info("ASOS 강수량 데이터가 누락되어 있습니다. 관리자에게 문의해 주세요.")
     else:
         monthly = effective_rainfall.aggregate_monthly(asos_df)
         half = effective_rainfall.aggregate_half_monthly(asos_df)
@@ -155,7 +155,7 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict):
     st.markdown(f"#### 💧 {section_title}")
 
     if not ws_data_all:
-        st.info("지하수위 데이터를 먼저 처리하세요. (⚙️ 데이터 관리 탭)")
+        st.info("지하수위 데이터가 누락되어 있습니다. 관리자에게 문의해 주세요.")
         return
 
     # 유역별·기간별 편차 계산

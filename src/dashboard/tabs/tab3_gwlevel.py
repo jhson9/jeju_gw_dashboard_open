@@ -51,7 +51,7 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     → 다른 탭에 영향 없고 화면 transient 깜박임 최소화.
     """
     if not ws_data_all:
-        st.warning("⚠️ 지하수위 데이터 없음. **⚙️ 데이터 관리** 탭에서 처리하세요.")
+        st.warning("⚠️ 지하수위 데이터가 누락되어 있습니다. 관리자에게 문의해 주세요.")
         return
 
     # ── (최상단) 유역별 편차 3-패널: M-2 · M-1 · M ───────────

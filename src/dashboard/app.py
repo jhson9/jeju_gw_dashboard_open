@@ -23,7 +23,6 @@
 # ==============================================================================
 
 import logging
-import os
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -207,7 +206,7 @@ tab_names = [
     "⑥ 이용량 분석",
     "⑦ 수질 분석",
     "⑧ 통계·요약",
-    "⚙️ 데이터 및 리포트",
+    "🧾 리포트",
 ]
 # v1.2.03: 탭 목록 폭을 화면의 ~2/3 로 축약 + 중앙 정렬, 모든 탭 동일 폭
 st.markdown("""
@@ -283,7 +282,7 @@ def _build_badge_html(periods: dict) -> str:
 
 
 def render_period_controls(suffix: str) -> None:
-    """탭 1~5 콘텐츠 첫 줄 — 분석기간 배지(좌) + 날짜 + 분석 + Quit (우).
+    """탭 1~5 콘텐츠 첫 줄 — 분석기간 배지(좌) + 날짜 + 분석 (우).
 
     suffix : 탭 식별자(t0~t4). 위젯 key 충돌 방지용.
     """
@@ -295,7 +294,8 @@ def render_period_controls(suffix: str) -> None:
         year_opts  = list(range(2010, 2031))
         month_opts = list(range(1, 13))
         day_opts   = list(range(1, 32))
-        sub = st.columns([1.0, 0.8, 0.8, 1.2, 0.9])
+        # Quit 버튼 제거(외부 공개판) — 컬럼 4개로 축소.
+        sub = st.columns([1.0, 0.8, 0.8, 1.2])
         with sub[0]:
             year = st.selectbox(
                 "연도", year_opts,
@@ -322,11 +322,6 @@ def render_period_controls(suffix: str) -> None:
                 max_d = monthrange(year, month)[1]
                 st.session_state["base_date"] = date(year, month, min(day, max_d))
                 st.rerun()
-        with sub[4]:
-            if st.button("⏹ Quit", use_container_width=True,
-                         help="서버를 종료하고 터미널을 빠져나갑니다.",
-                         key=f"qt_{suffix}"):
-                os._exit(0)
     st.markdown(
         '<hr style="margin:6px 0 10px;border:none;'
         'border-top:0.5px solid rgba(26,26,24,0.15);">',
