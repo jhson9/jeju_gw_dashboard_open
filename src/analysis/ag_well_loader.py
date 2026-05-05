@@ -47,6 +47,22 @@ _AG_QUALITY_REGULAR = getattr(
     _AG_QUALITY_DIR / "water_quality_regular.csv",
 )
 
+# 수질 기준치도 동일 패턴으로 안전 폴백 (Streamlit Cloud stale-import 대비)
+_WATER_QUALITY_STANDARDS_FALLBACK = {
+    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
+    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
+    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
+    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
+    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},
+}
+_WATER_QUALITY_REGULAR_STANDARDS_FALLBACK = {}
+_WATER_QUALITY_STANDARDS = getattr(config, "WATER_QUALITY_STANDARDS", _WATER_QUALITY_STANDARDS_FALLBACK)
+_WATER_QUALITY_REGULAR_STANDARDS = getattr(
+    config,
+    "WATER_QUALITY_REGULAR_STANDARDS",
+    _WATER_QUALITY_REGULAR_STANDARDS_FALLBACK,
+)
+
 
 # ------------------------------------------------------------------------------
 #  공통 헬퍼: 숫자/토큰 클리닝
@@ -331,7 +347,7 @@ def load_quality_semiannual() -> pd.DataFrame:
     if "half" in df.columns:
         df["half"] = df["half"].astype(str).str.strip()
 
-    df = _add_exceed_flags(df, config.WATER_QUALITY_STANDARDS)
+    df = _add_exceed_flags(df, _WATER_QUALITY_STANDARDS)
     return df.reset_index(drop=True)
 
 
@@ -343,7 +359,7 @@ def load_quality_regular() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.read_csv(p, encoding="utf-8-sig")
-    for col in config.WATER_QUALITY_REGULAR_STANDARDS:
+    for col in _WATER_QUALITY_REGULAR_STANDARDS:
         if col in df.columns:
             df[col] = df[col].apply(_parse_quality)
 
@@ -351,7 +367,7 @@ def load_quality_regular() -> pd.DataFrame:
         df["sampling_date"] = pd.to_datetime(df["sampling_date"], errors="coerce")
         df["year"] = df["sampling_date"].dt.year.astype("Int64")
 
-    df = _add_exceed_flags(df, config.WATER_QUALITY_REGULAR_STANDARDS)
+    df = _add_exceed_flags(df, _WATER_QUALITY_REGULAR_STANDARDS)
     return df.reset_index(drop=True)
 
 

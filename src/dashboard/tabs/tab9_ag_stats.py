@@ -34,6 +34,15 @@ PERIOD_MONTH = "월단위"
 # 사례가 있어, 모듈 레벨에서 안전한 fallback 을 적용한다.
 _AG_PALETTE_FALLBACK = {"seogwipo": "#C65911", "jeju": "#305496"}
 PALETTE = getattr(config, "AG_PALETTE", _AG_PALETTE_FALLBACK)
+
+_WATER_QUALITY_STANDARDS_FALLBACK = {
+    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
+    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
+    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
+    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
+    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},
+}
+_WQ = getattr(config, "WATER_QUALITY_STANDARDS", _WATER_QUALITY_STANDARDS_FALLBACK)
 CITY_COLOR = {
     "제주시":   PALETTE.get("jeju", _AG_PALETTE_FALLBACK["jeju"]),
     "서귀포시": PALETTE.get("seogwipo", _AG_PALETTE_FALLBACK["seogwipo"]),
@@ -200,7 +209,7 @@ def _compute_period_kpis(
     # 항목별 부적합 건수 (단축명 → 건수). 기준 없는 EC 등은 자동 제외.
     qual_item_counts: list[tuple[str, int]] = []
     if not sub_q.empty and flag_cols:
-        for item, std in config.WATER_QUALITY_STANDARDS.items():
+        for item, std in _WQ.items():
             col = f"{item}_exceed"
             if col not in sub_q.columns:
                 continue
@@ -765,7 +774,7 @@ def _render_quality_heatmap(df_qual: pd.DataFrame) -> None:
         st.caption("수질 자료 없음")
         return
 
-    items = list(config.WATER_QUALITY_STANDARDS.keys())
+    items = list(_WQ.keys())
     flag_cols = [f"{i}_exceed" for i in items if f"{i}_exceed" in df_qual.columns]
     if not flag_cols:
         st.caption("부적합 플래그를 계산할 수 없습니다.")
@@ -777,7 +786,7 @@ def _render_quality_heatmap(df_qual: pd.DataFrame) -> None:
     )
     long["item"] = long["item_flag"].str.replace("_exceed", "", regex=False)
     long["item_kor"] = long["item"].map(
-        lambda k: config.WATER_QUALITY_STANDARDS.get(k, {}).get("kor", k)
+        lambda k: _WQ.get(k, {}).get("kor", k)
     )
     pv = long.pivot_table(
         index="item_kor", columns="year",

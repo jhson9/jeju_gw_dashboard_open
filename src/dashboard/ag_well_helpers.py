@@ -746,7 +746,8 @@ def build_mini_charts(
                 mode="lines+markers", line=dict(color="#C00000", width=2),
                 marker=dict(size=6),
             ))
-            std = config.WATER_QUALITY_STANDARDS["nitrate_n"].get("max")
+            _wq = getattr(config, "WATER_QUALITY_STANDARDS", {"nitrate_n": {"max": 20.0}})
+            std = _wq.get("nitrate_n", {}).get("max")
             if std is not None:
                 fig.add_hline(y=std, line_dash="dot", line_color="#7F7F7F",
                               annotation_text=f"기준 ≤ {std}",

@@ -33,6 +33,16 @@ from src.collectors import asos_collector
 from src.dashboard import ag_well_helpers
 from src.dashboard.map_helpers import make_map
 
+# Streamlit Cloud stale-import 대비: _WQ 안전 폴백.
+_WATER_QUALITY_STANDARDS_FALLBACK = {
+    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
+    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
+    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
+    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
+    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},
+}
+_WQ = getattr(config, "WATER_QUALITY_STANDARDS", _WATER_QUALITY_STANDARDS_FALLBACK)
+
 
 # 공용 fragment-only rerun 헬퍼 (컨텍스트 가드 포함). ag_well_helpers 참조.
 _fragment_rerun = ag_well_helpers.fragment_rerun
@@ -587,7 +597,7 @@ def render() -> None:
 
     available_items = [
         k for k in QUALITY_ITEM_ORDER
-        if k in config.WATER_QUALITY_STANDARDS and k in df_qual.columns
+        if k in _WQ and k in df_qual.columns
     ]
     if not available_items:
         st.warning("수질 자료에 표시 가능한 항목이 없습니다.")
@@ -653,7 +663,7 @@ def render() -> None:
             "수질 항목",
             options=available_items,
             format_func=lambda k: (
-                f"{config.WATER_QUALITY_STANDARDS[k]['kor']} ({k})"
+                f"{_WQ[k]['kor']} ({k})"
             ),
             key="qty_item",
         )
@@ -769,7 +779,7 @@ def _render_kpi_cards(qf: pd.DataFrame, item: str, level: str) -> None:
        4) 최소값(그룹평균) — 동일 그룹별 평균 中 최소
        5) 기준 초과    — 초과 관정 수 + 초과 측정 횟수
     """
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     unit = std.get("unit", "")
     item_kor = std.get("kor", item)
     std_text = _std_label(std)
@@ -909,7 +919,7 @@ def _render_map(
     item: str,
     all_items: list[str],
 ) -> None:
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     unit = std.get("unit", "")
     item_kor = std.get("kor", item)
     std_text = _std_label(std)
@@ -1339,7 +1349,7 @@ def _render_quality_bar(
             (요청 #10), 강수량 차트와 X 축 공유 (요청 #11).
     - 바 색상: 상=라이트그린, 하=다크그린, 부적합=빨강.
     """
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     item_kor = std.get("kor", item)
     unit = std.get("unit", "")
 
@@ -1654,7 +1664,7 @@ def _render_quality_table(sub: pd.DataFrame, well_id: str) -> None:
 
     body_rows = []
     for it in items:
-        std = config.WATER_QUALITY_STANDARDS.get(it, {})
+        std = _WQ.get(it, {})
         item_label = (
             f'{std.get("kor", it)} '
             f'<span style="font-weight:400;opacity:0.85;font-size:10.5px;">'
@@ -1722,7 +1732,7 @@ def _render_group_section(
     if not loc_col or loc_col not in qf.columns:
         return
 
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     item_kor = std.get("kor", item)
     unit = std.get("unit", "")
     region = _region_label_short(loc_sel)
@@ -1768,7 +1778,7 @@ def _render_group_box_latest(
     if not order:
         return
 
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     fig = go.Figure()
     for g in order:
         gv = sub[sub[loc_col] == g][item].dropna()
@@ -1844,7 +1854,7 @@ def _render_half_box(
         h = "상" if i % 2 == 0 else "하"
         periods.append((y, h))
 
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     color_map = {"상": "#9CCC65", "하": "#33691E"}
 
     fig = go.Figure()
@@ -1938,7 +1948,7 @@ def _render_group_timeseries_table(
         for _, r in grp_avg.iterrows()
     }
 
-    std = config.WATER_QUALITY_STANDARDS.get(item, {})
+    std = _WQ.get(item, {})
     std_max = std.get("max")
     std_min = std.get("min")
 

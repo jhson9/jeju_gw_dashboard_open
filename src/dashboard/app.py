@@ -89,6 +89,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed",   # 사이드바 숨김
 )
 
+# ==============================================================================
+#  Streamlit Cloud stale-cache 방지 (commit 1435fa9 의 패턴을 일반화)
+#  ----------------------------------------------------------------------------
+#  배포 환경에서 이전 실행의 .pyc / @st.cache_data 결과가 남아 신규 코드와
+#  뒤섞이며 AttributeError 가 발생한 사례가 있어, 앱 시작 시점에 모든
+#  cache_data 항목을 무조건 비운다. 빈 캐시 비우기는 비용 거의 0.
+# ==============================================================================
+try:
+    st.cache_data.clear()
+except Exception:
+    pass
+
 # 공통 CSS (사이드바 완전 숨김 포함)
 theme.apply_theme()
 st.markdown("""
