@@ -3,7 +3,6 @@
 #  탭: ② 강수량 분석  —  Build 1.0 Final
 # ==============================================================================
 
-import re
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -12,11 +11,6 @@ import config
 from src.analysis import effective_rainfall
 from src.dashboard import theme
 
-
-def _hex_alpha(hex_col: str, alpha: float) -> str:
-    h = hex_col.lstrip("#")
-    r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
-    return f"rgba({r},{g},{b},{alpha})"
 
 def _short(y, m):
     return f"{str(y)[2:]}년 {m}월"
@@ -100,8 +94,8 @@ def render(asos_df: pd.DataFrame, periods: dict):
         else:
             eff_diff_html = "–"
 
-        bg_tint   = _hex_alpha(col, 0.08)
-        bord_tint = _hex_alpha(col, 0.25)
+        bg_tint   = theme.hex_alpha(col, 0.08)
+        bord_tint = theme.hex_alpha(col, 0.25)
         html = (
             f'<div style="background:{bg_tint};border-radius:8px;'
             f'padding:0.75rem 0.875rem;border-left:3px solid {col};margin-bottom:8px;">'
@@ -203,12 +197,158 @@ def render(asos_df: pd.DataFrame, periods: dict):
         unsafe_allow_html=True
     )
 
+    st.markdown("<div style='height:18px;'></div>", unsafe_allow_html=True)
+
+    # ── 연간 강수량 분석 ────────────────────────────────────
+    st.markdown(
+        f'<p style="font-size:15px;font-weight:600;margin:0 0 4px;">'
+        f'연간 강수량 분석 — 5개 차트 (평균·제주·서귀포·성산·고산)</p>'
+        f'<p style="{caption_style}">'
+        f'* 막대(연 총 강수량, 우 Y축) + 선(월 강수량, 좌 Y축) · '
+        f'완전한 12개월 자료가 있는 연도만 막대 표시</p>',
+        unsafe_allow_html=True
+    )
+    _render_annual_rainfall(asos_df)
+
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
     theme.render_note_box(
         f"💡 <strong>분석 메모</strong>: 4개 ASOS 관측소 데이터, "
         f"기준일 {periods['base_date']}의 M-2·M-1·M 기간 집계. "
         f"직전 {n_rain}년 평균은 각 기간 연도 기준으로 독립 계산."
     )
+
+
+# ==============================================================================
+#  ■ 연간 강수량 분석 — 막대(연 총합) + 선(월별), 이중 Y축
+# ==============================================================================
+def _render_annual_rainfall(asos_df: pd.DataFrame):
+    df = asos_df.copy()
+    df["일시"] = pd.to_datetime(df["일시"])
+    df["연도"] = df["일시"].dt.year
+    df["월"]   = df["일시"].dt.month
+
+    # 지점×연-월 월합계
+    monthly = (
+        df.groupby(["지점명", "연도", "월"])["일강수량(mm)"]
+          .sum().reset_index()
+          .rename(columns={"일강수량(mm)": "월강수량"})
+    )
+    # 4개 지점 평균 (월별)
+    avg_monthly = (
+        monthly.groupby(["연도", "월"])["월강수량"]
+               .mean().reset_index()
+    )
+    avg_monthly["지점명"] = "평균"
+    monthly_all = pd.concat(
+        [monthly[["지점명", "연도", "월", "월강수량"]],
+         avg_monthly[["지점명", "연도", "월", "월강수량"]]],
+        ignore_index=True,
+    )
+
+    chart_list = [
+        {"name": "평균",   "color": "#5f5e5a", "id": ""},
+        {"name": "제주",   "color": "#378ADD", "id": "184"},
+        {"name": "서귀포", "color": "#1D9E75", "id": "189"},
+        {"name": "성산",   "color": "#E24B4A", "id": "188"},
+        {"name": "고산",   "color": "#BA7517", "id": "185"},
+    ]
+
+    for chart in chart_list:
+        sn  = chart["name"]
+        col = chart["color"]
+        sub = monthly_all[monthly_all["지점명"] == sn].copy()
+        if sub.empty:
+            continue
+        sub = sub.sort_values(["연도", "월"]).reset_index(drop=True)
+        sub["dt"] = pd.to_datetime(
+            sub["연도"].astype(str) + "-"
+            + sub["월"].astype(str).str.zfill(2) + "-15"
+        )
+
+        # 12개월 자료가 모두 있는 연도만 연 총합 계산
+        cnt_per_year = sub.groupby("연도")["월"].nunique()
+        full_years = cnt_per_year[cnt_per_year == 12].index.tolist()
+        annual = (
+            sub[sub["연도"].isin(full_years)]
+              .groupby("연도")["월강수량"].sum()
+              .reset_index().rename(columns={"월강수량": "연강수량"})
+        )
+        annual["dt"] = pd.to_datetime(annual["연도"].astype(str) + "-07-01")
+
+        title_id = (
+            f' <span style="font-size:11px;font-weight:500;color:#5f5e5a;">'
+            f'({chart["id"]})</span>' if chart["id"] else ""
+        )
+        st.markdown(
+            f'<p style="font-size:14px;font-weight:600;margin:10px 0 0;color:{col};">'
+            f'{sn}{title_id}</p>',
+            unsafe_allow_html=True
+        )
+
+        # 막대 폭: ~340일 (mid-year 위치라 양쪽으로 ~5.5개월씩)
+        bar_width_ms = 340 * 24 * 3600 * 1000
+        # Y축 상한 — 이중축이라 따로 계산해 막대 라벨이 위 외부에 보이도록 여유
+        y2_max = (annual["연강수량"].max() * 1.18) if not annual.empty else 1
+        y1_max = (sub["월강수량"].max() * 1.20) if not sub.empty else 1
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=annual["dt"], y=annual["연강수량"],
+            name="연 총 강수량",
+            marker=dict(color=theme.hex_alpha(col, 0.30),
+                        line=dict(color=col, width=1)),
+            text=[f"{v:,.0f}" for v in annual["연강수량"]],
+            textposition="outside",
+            textfont=dict(size=10, color=col),
+            cliponaxis=False,
+            width=bar_width_ms,
+            yaxis="y2",
+            hovertemplate="%{x|%Y}<br>연 총 강수량: %{y:.0f} mm<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=sub["dt"], y=sub["월강수량"],
+            mode="lines+markers",
+            name="월 강수량",
+            line=dict(color=col, width=1.6),
+            marker=dict(size=4, color=col),
+            yaxis="y",
+            hovertemplate="%{x|%Y-%m}<br>월 강수량: %{y:.0f} mm<extra></extra>",
+        ))
+        fig.update_layout(
+            height=300,
+            xaxis=dict(
+                tickformat="%Y",
+                dtick="M12",
+                tickfont=dict(size=10),
+                showgrid=True, gridcolor="rgba(0,0,0,0.06)",
+            ),
+            yaxis=dict(
+                title=dict(text="월 강수량 (mm)", font=dict(size=10)),
+                side="left",
+                range=[0, y1_max],
+                tickfont=dict(size=9),
+            ),
+            yaxis2=dict(
+                title=dict(text="연 총 강수량 (mm)", font=dict(size=10)),
+                overlaying="y", side="right",
+                showgrid=False,
+                range=[0, y2_max],
+                tickfont=dict(size=9),
+            ),
+            margin=dict(t=10, b=18, l=50, r=55),
+            showlegend=True,
+            legend=dict(
+                orientation="h", yanchor="bottom", y=1.0,
+                xanchor="right", x=1,
+                font=dict(size=10),
+                bgcolor="rgba(255,255,255,0.5)",
+            ),
+            font=dict(size=10),
+            bargap=0.0,
+            plot_bgcolor="white",
+        )
+        st.plotly_chart(fig, use_container_width=True,
+                        key=f"t2_annual_{sn}")
 
 
 # ==============================================================================
@@ -265,7 +405,7 @@ def _render_2x2_charts(xlabels, stations, D, act_key, avg_key,
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 name=avg_name, x=xlabels, y=D[sn][avg_key],
-                marker=dict(color=_hex_alpha(col, 0.18), line=dict(color=col, width=1.5)),
+                marker=dict(color=theme.hex_alpha(col, 0.18), line=dict(color=col, width=1.5)),
                 text=[_fmt(v) for v in D[sn][avg_key]],
                 textposition="outside",
                 textfont=dict(size=10, color="#5f5e5a"),

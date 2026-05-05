@@ -3,7 +3,6 @@
 #  탭: ③ 지하수위 분석  —  Build 1.0 Final
 # ==============================================================================
 
-import re
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -15,11 +14,6 @@ from src.collectors import gwlevel_parser
 from src.dashboard import theme
 from plotly.subplots import make_subplots
 
-
-def _hex_alpha(hex_col: str, alpha: float) -> str:
-    h = hex_col.lstrip("#")
-    r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
-    return f"rgba({r},{g},{b},{alpha})"
 
 def _short(y, m): return f"{str(y)[2:]}년 {m}월"
 
@@ -49,7 +43,13 @@ _STATION_PALETTE = (
 
 
 # ==============================================================================
+@st.fragment
 def render(ws_data_all: dict, periods: dict, asos_df=None):
+    """지하수위 분석 탭.
+
+    @st.fragment: 유역 라디오(`tab3_ws_radio`) 변경 시 fragment-only rerun
+    → 다른 탭에 영향 없고 화면 transient 깜박임 최소화.
+    """
     if not ws_data_all:
         st.warning("⚠️ 지하수위 데이터 없음. **⚙️ 데이터 관리** 탭에서 처리하세요.")
         return
@@ -186,7 +186,7 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name=lbl_avg, x=xlabels, y=avg_v,
-        marker=dict(color=_hex_alpha(ws_col, 0.18), line=dict(color=ws_col, width=1.5)),
+        marker=dict(color=theme.hex_alpha(ws_col, 0.18), line=dict(color=ws_col, width=1.5)),
         text=[_fmt2(v) for v in avg_v],
         textposition="outside",
         textfont=dict(size=10, color="#5f5e5a"),
@@ -649,7 +649,7 @@ def _render_stations_section(sel, ws_col, periods, ps_keys, ps, n_gw, asos_df,
             v = stn_data[stn][pk]["actual"]
             ys.append(v)
             txt.append(f"{v:.2f}" if v is not None else "")
-            colors.append(_hex_alpha(station_colors[stn], period_alpha[pk]))
+            colors.append(theme.hex_alpha(station_colors[stn], period_alpha[pk]))
         fig.add_trace(go.Bar(
             name=pk,
             x=stations, y=ys,

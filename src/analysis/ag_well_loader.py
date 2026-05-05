@@ -22,23 +22,6 @@ import streamlit as st
 import config
 from src.dashboard.map_helpers import _tm_to_wgs84
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_AG_WELL_DIR = getattr(config, "AG_WELL_DIR", _PROJECT_ROOT / "data_ag_well")
-_AG_MASTER_FILE = getattr(config, "AG_MASTER_FILE", _AG_WELL_DIR / "master.csv")
-_AG_MASTER_YEARLY_DIR = getattr(config, "AG_MASTER_YEARLY_DIR", _AG_WELL_DIR / "master_yearly")
-_AG_USAGE_DIR = getattr(config, "AG_USAGE_DIR", _AG_WELL_DIR / "usage")
-_AG_QUALITY_DIR = getattr(config, "AG_QUALITY_DIR", _AG_WELL_DIR / "water_quality")
-_AG_QUALITY_SEMIANNUAL = getattr(
-    config,
-    "AG_QUALITY_SEMIANNUAL",
-    _AG_QUALITY_DIR / "water_quality_semiannual.csv",
-)
-_AG_QUALITY_REGULAR = getattr(
-    config,
-    "AG_QUALITY_REGULAR",
-    _AG_QUALITY_DIR / "water_quality_regular.csv",
-)
-
 
 # ------------------------------------------------------------------------------
 #  공통 헬퍼: 숫자/토큰 클리닝
@@ -177,7 +160,7 @@ def load_master(active_only: bool = True) -> pd.DataFrame:
         True 면 active=True (운영중) 관정만 반환. 지도 표시·검색 기본값.
         False 면 전체 (사라진 관정 포함). 통계 탭에서 사용.
     """
-    p = _AG_MASTER_FILE
+    p = config.AG_MASTER_FILE
     if not p.exists():
         return pd.DataFrame()
 
@@ -192,7 +175,7 @@ def load_master(active_only: bool = True) -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner=False)
 def load_master_yearly(year: int) -> pd.DataFrame:
     """master_yearly/master_YYYY.csv 를 로드. 없으면 빈 DataFrame."""
-    p = _AG_MASTER_YEARLY_DIR / f"master_{year}.csv"
+    p = config.AG_MASTER_YEARLY_DIR / f"master_{year}.csv"
     if not p.exists():
         return pd.DataFrame()
     df = pd.read_csv(p, encoding="utf-8-sig")
@@ -212,9 +195,9 @@ def load_master_yearly_all() -> pd.DataFrame:
     채워지므로 결과 DataFrame 에는 영향 없음.
     """
     frames = []
-    if not _AG_MASTER_YEARLY_DIR.exists():
+    if not config.AG_MASTER_YEARLY_DIR.exists():
         return pd.DataFrame()
-    for p in sorted(_AG_MASTER_YEARLY_DIR.glob("master_*.csv")):
+    for p in sorted(config.AG_MASTER_YEARLY_DIR.glob("master_*.csv")):
         try:
             year = int(p.stem.split("_")[-1])
         except ValueError:
@@ -245,13 +228,13 @@ def load_usage_long() -> pd.DataFrame:
     DataFrame columns: permit_no, well_id, year, month, volume_m3,
                        capacity_m3d, permit_m3m, usage_rate, date
     """
-    if not _AG_USAGE_DIR.exists():
+    if not config.AG_USAGE_DIR.exists():
         return pd.DataFrame()
 
     frames = []
-    yr_lo, yr_hi = getattr(config, "AG_USAGE_YEAR_RANGE", (2017, 2025))
+    yr_lo, yr_hi = config.AG_USAGE_YEAR_RANGE
     for yr in range(yr_lo, yr_hi + 1):
-        p = _AG_USAGE_DIR / f"usage_montly_{yr}.csv"
+        p = config.AG_USAGE_DIR / f"usage_montly_{yr}.csv"
         if not p.exists():
             continue
         d = pd.read_csv(p, encoding="utf-8-sig")
@@ -307,7 +290,7 @@ _QUALITY_NUMERIC_COLS = ("ammonia_n", "nitrate_n", "pH", "chloride", "EC")
 @st.cache_data(ttl=300, show_spinner=False)
 def load_quality_semiannual() -> pd.DataFrame:
     """반기 수질 5항목 long format. 부적합 플래그(*_exceed) 자동 추가."""
-    p = _AG_QUALITY_SEMIANNUAL
+    p = config.AG_QUALITY_SEMIANNUAL
     if not p.exists():
         return pd.DataFrame()
 
@@ -330,7 +313,7 @@ def load_quality_semiannual() -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner=False)
 def load_quality_regular() -> pd.DataFrame:
     """정기검사 15항목."""
-    p = _AG_QUALITY_REGULAR
+    p = config.AG_QUALITY_REGULAR
     if not p.exists():
         return pd.DataFrame()
 

@@ -12,14 +12,57 @@
 #   - 분석 리포트 생성
 # ==============================================================================
 
+from collections import Counter
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
 import config
-from src.collectors import asos_collector, gwlevel_parser
+from src.collectors import asos_collector, gwlevel_parser, gwlevel_day_parser
 from src.analysis import watershed_mapper
 from src.dashboard import theme
+
+
+# ────────────────────────────────────────────────────────────────────
+#  공용 헬퍼 — Row_Data 폴더에서 모든 관측소 xls 수집 (prefix 무관)
+# ────────────────────────────────────────────────────────────────────
+def _collect_xls(folder: Path) -> list[Path]:
+    """폴더에서 .xls/.xlsx 모두 수집. 임시(`~$*`)·정보(`0_*`) 파일 제외."""
+    if not folder.exists():
+        return []
+    out: list[Path] = []
+    for pat in ("*.xls", "*.xlsx"):
+        for p in folder.glob(pat):
+            n = p.name
+            if n.startswith("~$") or n.startswith("0_"):
+                continue
+            out.append(p)
+    return sorted(out)
+
+
+def _prefix_counts(files: list[Path]) -> dict[str, int]:
+    """파일명 prefix 2글자별 개수 — 진단용 (JD/JH/JI/JM/JP/JQ/JR/JW/PW...)."""
+    return dict(sorted(Counter(p.stem[:2] for p in files).items()))
+
+
+def _network_matching(files: list[Path]) -> tuple[int, list[str]]:
+    """JD관측망_정보.xlsx 의 관측소명과 파일명(stem) 매칭 — (매칭, 누락) 반환."""
+    p = config.find_jd_network_file()
+    if p is None:
+        return 0, []
+    try:
+        df = pd.read_excel(p)
+    except Exception:
+        return 0, []
+    if "관측소명" not in df.columns:
+        return 0, []
+    network = set(df["관측소명"].astype(str).str.strip())
+    file_names = {f.stem.strip() for f in files}
+    matched = network & file_names
+    missing = sorted(network - file_names)
+    return len(matched), missing
 
 
 def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
@@ -91,26 +134,60 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
         unsafe_allow_html=True
     )
 
-    xls_files = (list(config.ROW_DATA_DIR.glob("JD*.xls"))
-                 + list(config.ROW_DATA_DIR.glob("JD*.xlsx")))
+    # 월자료 xls — ROW_DATA_MONTH_DIR 우선, 없으면 legacy ROW_DATA_DIR
+    xls_files = _collect_xls(config.ROW_DATA_MONTH_DIR) or _collect_xls(config.ROW_DATA_DIR)
     jd_network_file = config.find_jd_network_file()
     station_csvs = list(config.GW_STATION_DIR.glob("*.csv"))
     watershed_csvs = list(config.GW_WATERSHED_DIR.glob("*.csv"))
 
+    # JD관측망 매칭 진단
+    matched_count, missing_in_files = _network_matching(xls_files)
+
     g1, g2, g3, g4 = st.columns(4)
     with g1:
-        st.metric("Row_Data xls", f"{len(xls_files)}개",
-                  help="사용자가 투입한 JD 관측소 원본 파일")
+        st.metric(
+            "Row_Data/Month xls", f"{len(xls_files)}개",
+            help="모든 관측소(JD/JH/JI/JM/JP/JQ/JR/JW/PW 등) 원본 월자료 파일",
+        )
     with g2:
-        st.metric("파싱된 관측소", f"{len(station_csvs)}개",
-                  help="S11 센서 추출 완료된 CSV 개수")
+        st.metric(
+            "파싱된 관측소", f"{len(station_csvs)}개",
+            help="S11 센서 추출 완료된 CSV 개수",
+        )
     with g3:
-        st.metric("집계된 유역", f"{len(watershed_csvs)}개",
-                  help="14개 중 실제 데이터가 있는 유역 수")
+        st.metric(
+            "집계된 유역", f"{len(watershed_csvs)}개",
+            help=f"config 의 {len(config.WATERSHEDS)}개 중 실제 데이터가 있는 유역 수",
+        )
     with g4:
         jd_status = "✅" if jd_network_file else "❌"
-        st.metric("JD관측망 정보", jd_status,
-                  help="0_JD관측망_정보.xlsx 존재 여부")
+        st.metric(
+            "JD관측망 정보", jd_status,
+            help="0_JD관측망_정보.xlsx 존재 여부",
+        )
+
+    # 진단 — prefix 분포 + 매칭 리포트
+    if xls_files:
+        pref = _prefix_counts(xls_files)
+        pref_str = " · ".join(f"{k} {v}" for k, v in pref.items())
+        diag_lines = [f"**📊 prefix 분포** ({len(xls_files)}개): {pref_str}"]
+        if jd_network_file:
+            try:
+                _net_df = pd.read_excel(jd_network_file)
+                n_net = len(_net_df) if "관측소명" in _net_df.columns else 0
+                if n_net:
+                    diag_lines.append(
+                        f"**🔗 JD관측망 매칭**: {matched_count}/{n_net}개"
+                        + (f" · 정보엔 있고 파일엔 없음 {len(missing_in_files)}개"
+                           if missing_in_files else "")
+                    )
+                    if missing_in_files:
+                        sample = ", ".join(missing_in_files[:6])
+                        more = f" 외 {len(missing_in_files)-6}개" if len(missing_in_files) > 6 else ""
+                        diag_lines.append(f"  · 누락 샘플: {sample}{more}")
+            except Exception:
+                pass
+        st.caption("  \n".join(diag_lines))
 
     bc1, bc2 = st.columns([1, 3])
     with bc1:
@@ -118,7 +195,7 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
                      type="primary", use_container_width=True,
                      key="tab4_run_gw_pipeline"):
             if not xls_files:
-                st.error("❌ data/Row_Data/ 에 JD*.xls 파일이 없습니다.")
+                st.error(f"❌ {config.ROW_DATA_MONTH_DIR} 에 관측소 xls 파일이 없습니다.")
             elif not jd_network_file:
                 st.error("❌ 0_JD관측망_정보.xlsx 파일이 없습니다. "
                          "data/ 폴더에 배치하세요.")
@@ -144,6 +221,107 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
         st.caption(
             "💡 이 버튼은 `python process_gwlevel.py` 와 동일한 작업입니다. \n"
             "💡 xls 파일은 원본 그대로 유지되며, S11 센서만 CSV로 추출됩니다."
+        )
+
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+
+    # --------------------------------------------------------------------------
+    # Section B': 지하수위 일자료 파이프라인 (Build 1.2.01)
+    # --------------------------------------------------------------------------
+    st.markdown(
+        '<p style="font-size:15px;font-weight:600;margin:0 0 6px;">'
+        '📅 지하수위 일자료 파이프라인 <span style="font-size:11px;font-weight:400;'
+        'color:#5f5e5a;">(Build 1.2.01 신규)</span></p>',
+        unsafe_allow_html=True
+    )
+    day_xls = _collect_xls(config.ROW_DATA_DAY_DIR)
+    day_csvs = list(config.GW_STATION_DAY_DIR.glob("*.csv"))
+    day_matched, day_missing = _network_matching(day_xls)
+
+    d1, d2, d3, d4 = st.columns(4)
+    with d1:
+        st.metric("Row_Data/Day xls", f"{len(day_xls)}개",
+                  help="제주 지하수정보관리시스템에서 다운로드한 관측정별 일자료 원본")
+    with d2:
+        st.metric("파싱된 일자료 CSV", f"{len(day_csvs)}개",
+                  help="data/GWlevel/by_station_day/ 에 저장됨")
+    with d3:
+        # 가장 최신 날짜 — 전체 CSV 검사 (177개 read 빠름, '날짜' 컬럼만)
+        if day_csvs:
+            try:
+                latest_dates = []
+                for p in day_csvs:
+                    try:
+                        df = pd.read_csv(p, encoding="utf-8-sig", usecols=["날짜"])
+                        if not df.empty:
+                            latest_dates.append(df["날짜"].max())
+                    except Exception:
+                        continue
+                st.metric(
+                    "최신 자료일자",
+                    max(latest_dates) if latest_dates else "-",
+                )
+            except Exception:
+                st.metric("최신 자료일자", "-")
+        else:
+            st.metric("최신 자료일자", "-")
+    with d4:
+        vw_status = "✅" if config.VWORLD_API_KEY else "❌"
+        st.metric("V-World API",
+                  vw_status,
+                  help=".env 의 VWORLD_API_KEY 설정 시 V-World 타일 사용")
+
+    # 진단 — prefix 분포 + 매칭 리포트
+    if day_xls:
+        pref = _prefix_counts(day_xls)
+        pref_str = " · ".join(f"{k} {v}" for k, v in pref.items())
+        diag_lines = [f"**📊 prefix 분포** ({len(day_xls)}개): {pref_str}"]
+        if jd_network_file:
+            try:
+                _net_df = pd.read_excel(jd_network_file)
+                n_net = len(_net_df) if "관측소명" in _net_df.columns else 0
+                if n_net:
+                    diag_lines.append(
+                        f"**🔗 JD관측망 매칭**: {day_matched}/{n_net}개"
+                        + (f" · 정보엔 있고 파일엔 없음 {len(day_missing)}개"
+                           if day_missing else "")
+                    )
+                    if day_missing:
+                        sample = ", ".join(day_missing[:6])
+                        more = f" 외 {len(day_missing)-6}개" if len(day_missing) > 6 else ""
+                        diag_lines.append(f"  · 누락 샘플: {sample}{more}")
+            except Exception:
+                pass
+        st.caption("  \n".join(diag_lines))
+
+    bd1, bd2 = st.columns([1, 3])
+    with bd1:
+        if st.button("📥 일자료 xls 파싱 (upsert)",
+                     type="primary", use_container_width=True,
+                     key="tab4_run_day_pipeline"):
+            if not day_xls:
+                st.error(f"❌ {config.ROW_DATA_DAY_DIR} 에 일자료 xls 가 없습니다.")
+            else:
+                with st.spinner(f"일자료 파싱 중... ({len(day_xls)}개 파일)"):
+                    try:
+                        res = gwlevel_day_parser.run_full_day_pipeline(verbose=False)
+                        st.success(
+                            f"✅ 일자료 파싱 완료: 성공 {res['success_count']}개 / "
+                            f"실패 {len(res['failed'])}개"
+                        )
+                        if res["failed"]:
+                            for n, r in res["failed"]:
+                                st.warning(f"  - {n}: {r}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 오류: {e}")
+
+    with bd2:
+        st.caption(
+            "💡 이 버튼은 `python -m src.collectors.gwlevel_day_parser` 와 동일합니다.\n"
+            "💡 다운로드한 일자료 xls(HTML 위장) 를 wide → long 으로 변환하고, "
+            "기존 CSV 와 (관측소명, 날짜) 키로 upsert(덮어쓰기) 합니다.\n"
+            "💡 4월 22일 이후 자료를 새로 받으면 같은 위치에 덮어 받고 이 버튼만 누르면 됩니다."
         )
 
     st.divider()
@@ -176,16 +354,19 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
         st.markdown("**폴더 구조**")
         config.ensure_directories()
         dirs_status = {
-            "data/ASOS":                 config.ASOS_DIR.exists(),
-            "data/GWlevel/by_station":   config.GW_STATION_DIR.exists(),
-            "data/GWlevel/by_watershed": config.GW_WATERSHED_DIR.exists(),
-            "data/Row_Data":             config.ROW_DATA_DIR.exists(),
-            "data/reports":              (config.DATA_DIR / "reports").exists(),
+            "data/ASOS":                     config.ASOS_DIR.exists(),
+            "data/GWlevel/by_station":       config.GW_STATION_DIR.exists(),
+            "data/GWlevel/by_station_month": config.GW_STATION_MONTH_DIR.exists(),
+            "data/GWlevel/by_station_day":   config.GW_STATION_DAY_DIR.exists(),
+            "data/GWlevel/by_watershed":     config.GW_WATERSHED_DIR.exists(),
+            "data/Row_Data/Month":           config.ROW_DATA_MONTH_DIR.exists(),
+            "data/Row_Data/Day":             config.ROW_DATA_DAY_DIR.exists(),
+            "data/reports":                  (config.DATA_DIR / "reports").exists(),
         }
         for name, exists in dirs_status.items():
             st.write(f"- `{name}`: {'✅' if exists else '❌'}")
 
-        st.write(f"- Row_Data JD 파일: **{len(xls_files)}개**")
+        st.write(f"- 월자료 xls: **{len(xls_files)}개** · 일자료 xls: **{len(day_xls)}개**")
 
     st.divider()
 
@@ -262,6 +443,8 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict,
                     file_name=fname,
                     mime="text/html",
                     use_container_width=True,
+                    # MediaFileStorageError 방지 — 위젯 ID 안정화 (호소 #7)
+                    key="tab4_html_download",
                 )
             with prev_col:
                 # JavaScript Blob URL 방식 — data: URL 의 "빈 탭" 문제 해결.

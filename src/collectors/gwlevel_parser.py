@@ -73,11 +73,20 @@ def parse_single_xls(file_path: Path,
     try:
         # 시트 목록 확인
         xl = pd.ExcelFile(file_path)
-        if sensor not in xl.sheet_names:
-            return "NO_SHEET", None
 
-        # 시트 읽기
-        df = pd.read_excel(file_path, sheet_name=sensor)
+        # 두 가지 xls 포맷 지원:
+        #  (구) 센서별 시트 분리: 'S11', 'S21', ... 시트 중 해당 sensor 시트를 읽음
+        #  (신) 단일 시트 'Sheet1' 에 모든 센서 행이 섞여 있음 → '센서' 컬럼으로 필터
+        if sensor in xl.sheet_names:
+            df = pd.read_excel(file_path, sheet_name=sensor)
+        elif "Sheet1" in xl.sheet_names:
+            df = pd.read_excel(file_path, sheet_name="Sheet1")
+            if "센서" in df.columns:
+                df = df[df["센서"] == sensor].copy()
+            else:
+                return "NO_SHEET", None
+        else:
+            return "NO_SHEET", None
 
         if df.empty:
             return "EMPTY", None
@@ -120,9 +129,31 @@ def parse_single_xls(file_path: Path,
 # ==============================================================================
 #  ■ 2. 전체 Row_Data 폴더 파싱
 # ==============================================================================
+def _collect_month_xls() -> list[Path]:
+    """월자료 xls 파일 수집 — ROW_DATA_MONTH_DIR 우선, 없으면 legacy ROW_DATA_DIR.
+
+    JD관측망_정보.xlsx 의 모든 관측소(JD/JH/JI/JM/JP/JQ/JR/JW/PW 등 prefix 무관)
+    를 포괄. 임시 파일(`~$*.xls`) 과 정보 파일(`0_*.xlsx`) 은 제외.
+    """
+    candidates: list[Path] = []
+    for src in (config.ROW_DATA_MONTH_DIR, config.ROW_DATA_DIR):
+        if not src.exists():
+            continue
+        for pat in ("*.xls", "*.xlsx"):
+            for p in src.glob(pat):
+                name = p.name
+                if name.startswith("~$") or name.startswith("0_"):
+                    continue
+                candidates.append(p)
+        if candidates:
+            break   # ROW_DATA_MONTH_DIR 에 파일이 있으면 거기만 사용
+    return sorted(candidates)
+
+
 def parse_all_row_data(sensor: str = None, verbose: bool = True) -> dict:
     """
-    data/Row_Data/ 에 있는 모든 JD*.xls* 파일을 일괄 파싱.
+    data/Row_Data/Month/ (또는 legacy data/Row_Data/) 에 있는 모든 관측소 xls
+    파일을 일괄 파싱. JD/JH/JI/JM/JP/JQ/JR/JW/PW 등 prefix 무관.
 
     Returns
     -------
@@ -136,21 +167,21 @@ def parse_all_row_data(sensor: str = None, verbose: bool = True) -> dict:
     if sensor is None:
         sensor = config.GW_REPRESENTATIVE_SENSOR
 
-    # Row_Data에서 JD*.xls / JD*.xlsx 파일 수집
-    xls_files = sorted(list(config.ROW_DATA_DIR.glob("JD*.xls")) +
-                       list(config.ROW_DATA_DIR.glob("JD*.xlsx")))
+    xls_files = _collect_month_xls()
 
     if not xls_files:
         if verbose:
-            print(f"⚠️ {config.ROW_DATA_DIR} 에 JD xls 파일이 없습니다.")
+            print(f"⚠️ {config.ROW_DATA_MONTH_DIR} (또는 {config.ROW_DATA_DIR}) "
+                  f"에 관측소 xls 파일이 없습니다.")
         return {"dataframes": {}, "failed": [],
                 "total_files": 0, "success_count": 0}
 
+    src_dir = xls_files[0].parent
     if verbose:
         print("=" * 70)
         print(f"🌊 지하수위 xls 파일 파싱 시작")
         print(f"   대상 센서: {sensor}")
-        print(f"   대상 경로: {config.ROW_DATA_DIR}")
+        print(f"   대상 경로: {src_dir}")
         print(f"   파일 수: {len(xls_files)}개")
         print("=" * 70)
 

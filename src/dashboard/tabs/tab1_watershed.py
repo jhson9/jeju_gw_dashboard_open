@@ -10,14 +10,22 @@ import pandas as pd
 import plotly.graph_objects as go
 
 import config
-from src.analysis import effective_rainfall
+from src.analysis import effective_rainfall, watershed_mapper
 from src.dashboard import theme
 
 
-def _hex_alpha(hex_col: str, alpha: float) -> str:
-    h = hex_col.lstrip("#")
-    r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
-    return f"rgba({r},{g},{b},{alpha})"
+@st.cache_data(ttl=300)
+def _ws_to_stations() -> dict:
+    """유역명 → 관측정 목록 매핑 (캐싱).
+
+    JD관측망_정보.xlsx 의 유역명 컬럼 기반 — config.WATERSHEDS 의 14개 유역에
+    매칭되는 관측정만 포함. 누락 유역명(31개) 은 매핑에서 제외.
+    """
+    try:
+        return watershed_mapper.get_watershed_to_stations_map(verbose=False)
+    except Exception:
+        return {}
+
 
 def _short_label(label: str) -> str:
     m = re.match(r"(\d{4})년 (\d+)월", str(label))
@@ -25,8 +33,16 @@ def _short_label(label: str) -> str:
 
 
 # ==============================================================================
+@st.fragment
 def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict):
+    """유역별 현황 탭.
 
+    @st.fragment 적용 이유:
+      유역 선택 라디오(`tab1_ws_radio`) 변경이 main rerun 을 일으키면
+      페이지 전체가 다시 그려지면서 이전 유역 콘텐츠와 새 유역 콘텐츠가
+      잠깐 동시에 보이는 transient 상태가 발생함. fragment-only rerun 으로
+      격리하면 이 탭 콘텐츠만 갱신되어 화면 깜박임이 거의 사라진다.
+    """
     # ── 유역 선택 ──────────
     # st.radio(horizontal=True): deselect 이슈가 없고 widget key 로 상태 관리됨.
     # segmented_control 의 "한 박자 늦은 반영 + 탭 튕김" 복합 버그를 해소.
@@ -287,10 +303,17 @@ def render(asos_df: pd.DataFrame, ws_data_all: dict, periods: dict):
     st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
     if has_ws:
         _render_gw_table(ws_df, periods, ps_keys)
+        # 유역 내 관측정 목록 — JD관측망_정보.xlsx 의 유역명 매핑 기반
+        ws_stations = _ws_to_stations().get(sel, [])
+        stations_str = (
+            ", ".join(ws_stations) if ws_stations else "(매핑된 관측정 없음)"
+        )
         st.markdown(
             f'<p style="font-size:10px;color:#5f5e5a;margin:4px 0 0;">'
             f'* 최근 월 수위 : {recent_months}'
-            f' &nbsp;|&nbsp; 과거 {n_gw}년 해당월 : {baseline_gw_str}</p>',
+            f' &nbsp;|&nbsp; 과거 {n_gw}년 해당월 : {baseline_gw_str}</p>'
+            f'<p style="font-size:10px;color:#5f5e5a;margin:2px 0 0;">'
+            f'* 유역 내 관측정 ({len(ws_stations)}공) : {stations_str}</p>',
             unsafe_allow_html=True
         )
     else:
@@ -338,7 +361,7 @@ def _grouped_bar(xlabels, avg_vals, act_vals, color, avg_name, act_name, unit,
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name=avg_name, x=xlabels, y=avg_vals,
-        marker=dict(color=_hex_alpha(color, 0.18), line=dict(color=color, width=1.5)),
+        marker=dict(color=theme.hex_alpha(color, 0.18), line=dict(color=color, width=1.5)),
         text=[_fmt(v) for v in avg_vals],
         textposition="outside",
         textfont=dict(size=10, color="#5f5e5a"),
@@ -539,7 +562,3 @@ def _render_aws_table(monthly, half, periods, station, ps_keys):
     st.markdown(head + body + "</tbody></table>", unsafe_allow_html=True)
 
 
-def _hex_alpha(hex_col: str, alpha: float) -> str:
-    h = hex_col.lstrip("#")
-    r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
-    return f"rgba({r},{g},{b},{alpha})"

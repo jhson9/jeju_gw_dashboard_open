@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 #  빌드 버전 (대시보드 푸터에 표시)
 #  수정 때마다 0.01 씩 증가시킵니다.
 # ------------------------------------------------------------------------------
-BUILD_VERSION = "1.2.09"
+BUILD_VERSION = "2.0.0"
 
 # ------------------------------------------------------------------------------
 #  .env 파일 로드 (API 키 등 비밀 정보)
@@ -48,52 +48,14 @@ PROJECT_ROOT = Path(__file__).parent.resolve()  # 프로젝트 최상위 폴더
 
 DATA_DIR = PROJECT_ROOT / "data"                # 전체 데이터 저장 폴더
 ASOS_DIR = DATA_DIR / "ASOS"                    # 기상 데이터 CSV 저장 위치
-# 🆕 Build 1.2.01: 월별/일별 분리. 레거시 by_station 도 폴백으로 유지.
-GW_STATION_DIR       = DATA_DIR / "GWlevel" / "by_station"        # (레거시) 월별
+# 🆕 Build 1.2.01: 월별/일별 분리. 레거시 by_station 도 폴백으로 유지(요청 9·10).
+GW_STATION_DIR       = DATA_DIR / "GWlevel" / "by_station"        # (레거시) 월별 - 마이그레이션 전까지 유지
 GW_STATION_MONTH_DIR = DATA_DIR / "GWlevel" / "by_station_month"  # 월별 (정규)
 GW_STATION_DAY_DIR   = DATA_DIR / "GWlevel" / "by_station_day"    # 일별 (신규)
 GW_WATERSHED_DIR     = DATA_DIR / "GWlevel" / "by_watershed"      # 수역별 월별 CSV
 ROW_DATA_DIR         = DATA_DIR / "Row_Data"            # xls 원본 루트(레거시)
 ROW_DATA_MONTH_DIR   = ROW_DATA_DIR / "Month"           # 월별 원본
 ROW_DATA_DAY_DIR     = ROW_DATA_DIR / "Day"             # 일별 원본 (HTML-disguised .xls)
-
-# 🆕 농업용 관정 데이터 (제주시·서귀포시 사후관리 DB)
-AG_WELL_DIR             = PROJECT_ROOT / "data_ag_well"
-AG_MASTER_FILE          = AG_WELL_DIR / "master.csv"
-AG_MASTER_YEARLY_DIR    = AG_WELL_DIR / "master_yearly"
-AG_USAGE_DIR            = AG_WELL_DIR / "usage"
-AG_QUALITY_DIR          = AG_WELL_DIR / "water_quality"
-AG_QUALITY_SEMIANNUAL   = AG_QUALITY_DIR / "water_quality_semiannual.csv"
-AG_QUALITY_REGULAR      = AG_QUALITY_DIR / "water_quality_regular.csv"
-
-# 사후관리 자료 보유 연도 (실제 파일 기준; 갱신 시 자동 확장은 loader가 처리)
-AG_USAGE_YEAR_RANGE   = (2017, 2025)
-AG_QUALITY_YEAR_RANGE = (2015, 2025)
-
-# --- 사후관리: 반기 수질 5항목 기준치 (먹는물공동시설 기준) ---
-WATER_QUALITY_STANDARDS = {
-    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
-    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
-    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
-    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
-    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},  # 참고치
-}
-
-# 🆕 농업용 관정 색상 팔레트
-AG_PALETTE = {
-    "seogwipo":     "#C65911",   # 서귀포시 (관할)
-    "jeju":         "#305496",   # 제주시 (관할)
-    "agriculture":  "#548235",   # 농업용
-    "household":    "#305496",   # 생활용
-    "fisheries":    "#5B9BD5",   # 어업용
-    "industrial":   "#C00000",   # 공업용
-}
-AG_QUALITY_PALETTE = {
-    "normal":   "#548235",   # 적합
-    "exceed":   "#C00000",   # 부적합
-    "missing":  "#7F7F7F",   # 측정안됨/누락
-    "below_dl": "#9DC3E6",   # 불검출
-}
 
 # JD관측망 정보 파일 (업로드한 엑셀)
 # 🆕 Build 0.7: 탐색 우선순위를 data/ 폴더 중심으로 변경.
@@ -115,25 +77,10 @@ JD_NETWORK_FILE_CANDIDATES = [
 # ==============================================================================
 #  ■ 2. 기상청 API 설정
 # ==============================================================================
-# 우선순위: 환경변수(.env, 로컬) → Streamlit Cloud Secrets (외부 배포 시)
-KMA_API_KEY = os.getenv("KMA_API_KEY", "")
-if not KMA_API_KEY:
-    try:
-        import streamlit as st
-        KMA_API_KEY = st.secrets.get("KMA_API_KEY", "")
-    except Exception:
-        pass
-
-# 🆕 Build 1.2.01: V-World 2D 지도 API 키 (공간 분석 탭용).
-#   동일한 우선순위: .env → Streamlit Cloud Secrets.
-#   미설정 시 OpenStreetMap + ESRI 위성으로 자동 폴백.
+KMA_API_KEY = os.getenv("KMA_API_KEY", "")  # .env 파일에서 읽어옴
+# 🆕 Build 1.2.01: V-World 2D 지도 API 키 (지도 분석 탭용).
+# 미설정 시 OpenStreetMap + ESRI 위성으로 자동 폴백.
 VWORLD_API_KEY = os.getenv("VWORLD_API_KEY", "")
-if not VWORLD_API_KEY:
-    try:
-        import streamlit as st
-        VWORLD_API_KEY = st.secrets.get("VWORLD_API_KEY", "")
-    except Exception:
-        pass
 # 🆕 Build 0.3: HTTPS 전환 (공공데이터포털이 2024년부터 HTTPS 강제)
 KMA_API_URL = "https://apis.data.go.kr/1360000/AsosDalyInfoService/getWthrDataList"
 # 🆕 Build 0.3: 진단용 폴백 URL (HTTPS 실패 시 HTTP로 테스트)
@@ -190,11 +137,13 @@ WATERSHEDS = [
     {"name": "대정",   "aws": "고산",   "color": "#888780"},
     {"name": "한경",   "aws": "고산",   "color": "#BA7517"},
     {"name": "한림",   "aws": "제주",   "color": "#1D9E75"},
+    {"name": "애월",   "aws": "제주",   "color": "#6FAE5A"},   # 추가 — 제주시 서부
     # 남부
     {"name": "남원",   "aws": "성산",   "color": "#D4537E"},
     {"name": "동서귀", "aws": "서귀포", "color": "#639922"},
     {"name": "중서귀", "aws": "서귀포", "color": "#E24B4A"},
     {"name": "서서귀", "aws": "서귀포", "color": "#D85A30"},
+    {"name": "안덕",   "aws": "고산",   "color": "#C2956F"},   # 추가 — 서귀포시 서부
     # 북부
     {"name": "동제주", "aws": "제주",   "color": "#85B7EB"},
     {"name": "중제주", "aws": "제주",   "color": "#378ADD"},
@@ -213,7 +162,7 @@ WATERSHED_AWS_MAP = {w["name"]: w["aws"] for w in WATERSHEDS}
 #  ■ 5. 분석 파라미터
 # ==============================================================================
 # --- 데이터 수집 기간 ---
-ASOS_START_DATE = "20160101"   # 2016년 1월 1일부터 누적
+ASOS_START_DATE = "20000101"   # 2000년 1월 1일부터 누적 (지하수위 관측정 시작 시점에 맞춰 확장)
 # 종료일은 수집 시 '오늘' 날짜로 자동 결정됨 (asos_collector.py 참조)
 
 # --- 기준 평균 산정 ---
@@ -268,6 +217,69 @@ THEME_LIGHT = {
 # ==============================================================================
 #  ■ 8. 유틸리티 함수
 # ==============================================================================
+# ==============================================================================
+#  ■ 9. 농업용 공공관정 모듈 (data_ag_well/) — Build 2.0
+# ==============================================================================
+#  서귀포시 414개 농업용 공공관정의 사후관리 자료(이용량·수질).
+#  외부 ETL이 갱신한 CSV만 read-only 로 읽는다.
+
+AG_WELL_DIR             = PROJECT_ROOT / "data_ag_well"
+AG_MASTER_FILE          = AG_WELL_DIR / "master.csv"
+AG_MASTER_YEARLY_DIR    = AG_WELL_DIR / "master_yearly"
+AG_USAGE_DIR            = AG_WELL_DIR / "usage"
+AG_QUALITY_DIR          = AG_WELL_DIR / "water_quality"
+AG_QUALITY_SEMIANNUAL   = AG_QUALITY_DIR / "water_quality_semiannual.csv"
+AG_QUALITY_REGULAR      = AG_QUALITY_DIR / "water_quality_regular.csv"
+
+# 사후관리 자료 보유 연도 (실제 파일 기준; 갱신 시 자동 확장은 loader 가 처리)
+AG_USAGE_YEAR_RANGE   = (2017, 2025)   # usage_montly_YYYY.csv
+AG_QUALITY_YEAR_RANGE = (2015, 2025)   # water_quality_semiannual.csv
+
+# --- 사후관리: 반기 수질 5항목 기준치 (먹는물공동시설 기준) ---
+WATER_QUALITY_STANDARDS = {
+    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
+    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
+    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
+    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
+    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},  # 참고치
+}
+
+# --- 정기검사 15항목 기준치 (mg/L) ---
+WATER_QUALITY_REGULAR_STANDARDS = {
+    "pH":         {"kor": "수소이온농도",        "unit": "-",    "min": 6.0, "max": 8.5},
+    "chloride":   {"kor": "염소이온",            "unit": "mg/L", "max": 250.0},
+    "nitrate_n":  {"kor": "질산성질소",          "unit": "mg/L", "max": 20.0},
+    "cadmium":    {"kor": "카드뮴",              "unit": "mg/L", "max": 0.01},
+    "arsenic":    {"kor": "비소",                "unit": "mg/L", "max": 0.05},
+    "cyanide":    {"kor": "시안",                "unit": "mg/L", "max": 0.01},
+    "mercury":    {"kor": "수은",                "unit": "mg/L", "max": 0.001},
+    "diazinon":   {"kor": "다이아지논",          "unit": "mg/L", "max": 0.02},
+    "parathion":  {"kor": "파라티온",            "unit": "mg/L", "max": 0.06},
+    "phenol":     {"kor": "페놀",                "unit": "mg/L", "max": 0.005},
+    "lead":       {"kor": "납",                  "unit": "mg/L", "max": 0.1},
+    "chromium":   {"kor": "크롬",                "unit": "mg/L", "max": 0.05},
+    "TCE":        {"kor": "트리클로로에틸렌",    "unit": "mg/L", "max": 0.03},
+    "PCE":        {"kor": "테트라클로로에틸렌",  "unit": "mg/L", "max": 0.01},
+    "TCA_111":    {"kor": "1,1,1-트리클로로에탄","unit": "mg/L", "max": 0.3},
+}
+
+# --- 농업용 관정 색상 팔레트 ---
+AG_PALETTE = {
+    "seogwipo":     "#C65911",   # 서귀포시 (관할)
+    "jeju":         "#305496",   # 제주시 (관할)
+    "agriculture":  "#548235",   # 농업용
+    "household":    "#305496",   # 생활용
+    "fisheries":    "#5B9BD5",   # 어업용
+    "industrial":   "#C00000",   # 공업용
+}
+AG_QUALITY_PALETTE = {
+    "normal":   "#548235",   # 적합
+    "exceed":   "#C00000",   # 부적합
+    "missing":  "#7F7F7F",   # 측정안됨/누락
+    "below_dl": "#9DC3E6",   # 불검출
+}
+
+
 def ensure_directories():
     """
     필수 디렉토리들이 없으면 자동으로 생성합니다.

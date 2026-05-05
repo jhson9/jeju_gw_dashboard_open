@@ -30,19 +30,14 @@ from src.analysis import ag_well_loader, ag_well_metrics, effective_rainfall
 PERIOD_YEAR  = "년단위"
 PERIOD_MONTH = "월단위"
 
-_AG_PALETTE_FALLBACK = {
-    "seogwipo": "#C65911",
-    "jeju":     "#305496",
-}
-PALETTE = getattr(config, "AG_PALETTE", _AG_PALETTE_FALLBACK)
 CITY_COLOR = {
-    "제주시":   PALETTE.get("jeju", _AG_PALETTE_FALLBACK["jeju"]),
-    "서귀포시": PALETTE.get("seogwipo", _AG_PALETTE_FALLBACK["seogwipo"]),
+    "제주시":   config.AG_PALETTE["jeju"],
+    "서귀포시": config.AG_PALETTE["seogwipo"],
 }
 AUTH_TO_CITY = {"jeju": "제주시", "seogwipo": "서귀포시"}
 
 RAIN_LINE_COLOR = "#185fa5"   # 강수량 라인 색상 (제주시 톤)
-CARD_ACCENT     = PALETTE.get("jeju", _AG_PALETTE_FALLBACK["jeju"])   # #305496 — 농업용 관정 컨텍스트의 대표 색
+CARD_ACCENT     = config.AG_PALETTE["jeju"]   # #305496 — 농업용 관정 컨텍스트의 대표 색
 
 # 수질 항목 단축명 (수질 부적합 카드 캡션용 — config.kor 보다 짧고 직관적)
 QUALITY_SHORT_NAMES = {
@@ -273,13 +268,7 @@ def _monthly_avg_rainfall(asos_df: pd.DataFrame, year: int) -> pd.DataFrame:
 # ------------------------------------------------------------------------------
 #  ■ render
 # ------------------------------------------------------------------------------
-def render(
-    ag_master_df: pd.DataFrame | None = None,
-    ag_usage_df: pd.DataFrame | None = None,
-    ag_wq_df: pd.DataFrame | None = None,
-    periods: dict | None = None,
-    asos_df: pd.DataFrame | None = None,
-) -> None:
+def render(asos_df: pd.DataFrame | None = None) -> None:
     st.markdown(
         '<h2 style="font-size:22px;font-weight:500;margin:0 0 6px;padding:0;'
         'color:#1a1a18;line-height:1.2;">'
@@ -287,10 +276,10 @@ def render(
         unsafe_allow_html=True,
     )
 
-    df_master_all = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=False)
-    df_master_act = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=True)
-    df_usage      = ag_usage_df if ag_usage_df is not None else ag_well_loader.load_usage_long()
-    df_qual       = ag_wq_df if ag_wq_df is not None else ag_well_loader.load_quality_semiannual()
+    df_master_all = ag_well_loader.load_master(active_only=False)
+    df_master_act = ag_well_loader.load_master(active_only=True)
+    df_usage      = ag_well_loader.load_usage_long()
+    df_qual       = ag_well_loader.load_quality_semiannual()
 
     if df_master_all.empty:
         st.warning("관정 마스터 자료를 찾을 수 없습니다.")
@@ -376,9 +365,9 @@ def render(
             f'<span style="color:#185fa5;font-weight:600;">관정 현황</span> &nbsp;'
             f'활성 <b style="color:#1a1a18;">{active:,}공</b>{inactive_tag}'
             f'  ·  '
-            f'제주 <b style="color:{PALETTE.get("jeju", _AG_PALETTE_FALLBACK["jeju"])};">{n_jeju:,}공</b>'
+            f'제주 <b style="color:{config.AG_PALETTE["jeju"]};">{n_jeju:,}공</b>'
             f'  ·  '
-            f'서귀포 <b style="color:{PALETTE.get("seogwipo", _AG_PALETTE_FALLBACK["seogwipo"])};">{n_seogwipo:,}공</b>'
+            f'서귀포 <b style="color:{config.AG_PALETTE["seogwipo"]};">{n_seogwipo:,}공</b>'
             f'</div>',
             unsafe_allow_html=True,
         )

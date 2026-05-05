@@ -33,6 +33,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 import config
 
@@ -40,6 +41,7 @@ import config
 # ==============================================================================
 #  ■ 1. 월별 집계
 # ==============================================================================
+@st.cache_data(ttl=600, show_spinner=False)
 def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     """
     일별 ASOS 데이터를 '지점 × 연월' 단위로 집계.
@@ -98,6 +100,7 @@ def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
 #     기존 HTML 대시보드 v8의 로직과 일치:
 #     오늘이 16일 이후이면 M 기간 = 당월 1~15일 (반월)
 # ==============================================================================
+@st.cache_data(ttl=600, show_spinner=False)
 def aggregate_half_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     """
     매월 1~15일 데이터만 집계.

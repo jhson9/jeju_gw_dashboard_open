@@ -24,7 +24,7 @@ from streamlit_folium import st_folium
 import config
 from src.analysis import effective_rainfall, aws_yearly
 from src.collectors import gwlevel_day_parser
-from src.dashboard import map_helpers
+from src.dashboard import map_helpers, theme, ag_well_helpers
 
 
 # ==============================================================================
@@ -48,12 +48,6 @@ def _list_day_stations_cached() -> list[str]:
 # ==============================================================================
 #  ■ 색상 헬퍼
 # ==============================================================================
-def _hex_alpha(h: str, a: float) -> str:
-    h = h.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{a})"
-
-
 def _diff_html(d: float | None, unit: str = "", decimals: int = 1) -> str:
     if d is None:
         return "–"
@@ -120,8 +114,13 @@ def _baseline_footnote(table: pd.DataFrame, n_baseline: int,
 
 
 # ==============================================================================
-#  ■ 메인 렌더
+#  ■ 메인 렌더 — render() 전체를 단일 @st.fragment 로 (Phase 3 P1).
+#    tab6/7/8 와 동일 패턴. 마커 클릭·selectbox·radio 변경 시 fragment-only
+#    rerun 으로 처리되어 흰 깜박임·탭 점프 차단.
+#    ※ st_folium 의 동적 key (`tab5_map_{mode}`) 는 mode 변경 시 iframe 을
+#      재마운트하지만 fragment 안에서도 동일 동작 — 위험 없음.
 # ==============================================================================
+@st.fragment
 def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
     meta = _load_meta_cached()
     day_stations = _list_day_stations_cached()
@@ -248,14 +247,14 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
                     st.session_state["tab5_pending"] = {
                         "mode": "AWS", "value": aws_nm
                     }
-                    st.rerun()
+                    ag_well_helpers.fragment_rerun()
         elif tip in avail_stations:
             if (st.session_state.get("tab5_mode") != "관측정"
                     or st.session_state.get("tab5_station_sel") != tip):
                 st.session_state["tab5_pending"] = {
                     "mode": "관측정", "value": tip
                 }
-                st.rerun()
+                ag_well_helpers.fragment_rerun()
 
     st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
@@ -558,7 +557,8 @@ def _render_aws_detail(aws_name: str, asos_df: pd.DataFrame, base_date: date):
 
     st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
-    # ── 12개월 유효강수일수 ──
+    # ── 12개월 유효강수일수 (차트만) ──
+    # v1.2.09: 비교표는 10년+ 농업유효 차트 바로 위로 이동 (요청 5)
     eff_table = aws_yearly.build_12month_table(
         asos_df, aws_name, base_date, metric="유효강수일수(일)",
         n_baseline=n_rain)
@@ -573,24 +573,9 @@ def _render_aws_detail(aws_name: str, asos_df: pd.DataFrame, base_date: date):
                            key=f"t5_aws_eff_{aws_name}", decimals=0,
                            n_baseline=n_rain)
 
-    st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-    st.markdown(
-        f'<p style="font-size:15px;font-weight:600;margin:0 0 4px;">'
-        f'농업유효강수일수 비교표 — 직전 12개월 (일)</p>',
-        unsafe_allow_html=True,
-    )
-    _render_12month_table(eff_table, unit="일", decimals=0,
-                           metric_label="유효강수일수", n_baseline=n_rain)
-    # 요청 13: 유효강수일수 비교표 각주
-    st.markdown(
-        f'<p style="font-size:10px;color:#5f5e5a;margin:4px 0 0;">'
-        f'{_baseline_footnote(eff_table, n_rain, label="과거 N년 평균")}</p>',
-        unsafe_allow_html=True,
-    )
-
     st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
-    # ── 10년 월별 강수량 (시작월 드롭다운) ──
+    # ── 10년+ 범위 섹션: 시작월 드롭다운 (3개 차트 공유) ──
     monthly = effective_rainfall.aggregate_monthly(asos_df)
     df_m = monthly[monthly["지점명"] == aws_name].copy()
     if df_m.empty:
@@ -600,21 +585,15 @@ def _render_aws_detail(aws_name: str, asos_df: pd.DataFrame, base_date: date):
     df_m = df_m.sort_values("연월").reset_index(drop=True)
     earliest_ym = df_m["연월"].iloc[0]
     latest_ym = df_m["연월"].iloc[-1]
-    # 시작월 드롭다운 (월 단위)
     all_months = df_m["연월"].tolist()
-    # 기본 = base_date 기준 10년 전의 1월
     default_ym = f"{base_date.year - 10}-01"
-    # 가장 가까운 후보 인덱스
-    if default_ym in all_months:
-        default_idx = all_months.index(default_ym)
-    else:
-        default_idx = 0
+    default_idx = all_months.index(default_ym) if default_ym in all_months else 0
 
     h1, h2 = st.columns([2.0, 1.0])
     with h1:
         st.markdown(
-            f'<p style="font-size:15px;font-weight:600;margin:0;">'
-            f'월별 강수량 추이 — {aws_name} (10년+ 범위)</p>',
+            f'<p style="font-size:15px;font-weight:600;margin:0;'
+            f'padding:6px 0;">10년+ 범위 분석 — {aws_name}</p>',
             unsafe_allow_html=True,
         )
     with h2:
@@ -629,15 +608,53 @@ def _render_aws_detail(aws_name: str, asos_df: pd.DataFrame, base_date: date):
     if plot.empty:
         st.info("선택 범위 내 데이터 없음.")
         return
+
+    # ── ① 일별 강수량 추이 (요청 4: NEW — 월별 차트 위에 위치) ──
+    sy, sm = int(start_ym[:4]), int(start_ym[5:7])
+    start_dt = pd.Timestamp(year=sy, month=sm, day=1)
+    daily = asos_df[(asos_df["지점명"] == aws_name)
+                    & (asos_df["일시"] >= start_dt)].copy()
+    daily = daily.sort_values("일시")
+
+    st.markdown(
+        f'<p style="font-size:15px;font-weight:600;margin:0 0 4px;">'
+        f'일별 강수량 추이 — {aws_name} (10년+ 범위)</p>',
+        unsafe_allow_html=True,
+    )
+    fig_d = go.Figure()
+    fig_d.add_trace(go.Bar(
+        x=daily["일시"], y=daily["일강수량(mm)"],
+        marker=dict(color=theme.hex_alpha(color, 0.95),
+                    line=dict(color=color, width=0.05)),
+        hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f} mm<extra></extra>",
+    ))
+    fig_d.update_layout(
+        height=240,
+        xaxis_title="", yaxis_title="일강수량 (mm)",
+        margin=dict(t=8, b=8, l=50, r=10),
+        font=dict(size=11),
+        showlegend=False,
+        bargap=0,
+        yaxis=dict(rangemode="tozero"),
+    )
+    st.plotly_chart(fig_d, use_container_width=True,
+                    key=f"t5_aws_10y_daily_{aws_name}")
+
+    # ── ② 월별 강수량 추이 ──
+    st.markdown(
+        f'<p style="font-size:15px;font-weight:600;margin:8px 0 4px;">'
+        f'월별 강수량 추이 — {aws_name} (10년+ 범위)</p>',
+        unsafe_allow_html=True,
+    )
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=plot["연월"], y=plot["월강수량(mm)"],
-        marker=dict(color=_hex_alpha(color, 0.85),
+        marker=dict(color=theme.hex_alpha(color, 0.85),
                     line=dict(color=color, width=0.5)),
         hovertemplate="%{x}<br>%{y:.0f} mm<extra></extra>",
     ))
     fig.update_layout(
-        height=320,
+        height=300,
         xaxis_title="", yaxis_title="월강수량 (mm)",
         margin=dict(t=8, b=8, l=50, r=10),
         font=dict(size=11),
@@ -649,9 +666,72 @@ def _render_aws_detail(aws_name: str, asos_df: pd.DataFrame, base_date: date):
     st.markdown(
         f'<p style="font-size:10px;color:#5f5e5a;margin:0;">'
         f'데이터 전체 범위: {earliest_ym} ~ {latest_ym} '
-        f'&nbsp;|&nbsp; 총 {len(df_m)}개월 (선택 표시: {len(plot)}개월)</p>',
+        f'&nbsp;|&nbsp; 총 {len(df_m)}개월 (선택 표시: {len(plot)}개월) '
+        f'&nbsp;|&nbsp; 일자료: {len(daily):,}일</p>',
         unsafe_allow_html=True,
     )
+
+    # ── ③ 12개월 유효강수 비교표 (요청 5: 위치 이동 — 10년 유효 차트 직상단) ──
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
+    st.markdown(
+        f'<p style="font-size:15px;font-weight:600;margin:0 0 4px;">'
+        f'농업유효강수일수 비교표 — 직전 12개월 (일)</p>',
+        unsafe_allow_html=True,
+    )
+    _render_12month_table(eff_table, unit="일", decimals=0,
+                           metric_label="유효강수일수", n_baseline=n_rain)
+    st.markdown(
+        f'<p style="font-size:10px;color:#5f5e5a;margin:4px 0 0;">'
+        f'{_baseline_footnote(eff_table, n_rain, label="과거 N년 평균")}</p>',
+        unsafe_allow_html=True,
+    )
+
+    # ── ④ 월별 농업유효강수일수 추이 (요청 1·2·3: Y축 0~15, 2씩, ≥15 라벨) ──
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+    st.markdown(
+        f'<p style="font-size:15px;font-weight:600;margin:0 0 4px;">'
+        f'월별 농업유효강수일수 추이 — {aws_name} (10년+ 범위)</p>'
+        f'<p style="font-size:10px;color:#5f5e5a;margin:0 0 4px;">'
+        f'기준: 일강수량 {config.EFFECTIVE_RAINFALL_THRESHOLD_MM} mm 이상 / '
+        f'시작월은 위 강수량 차트와 공유</p>',
+        unsafe_allow_html=True,
+    )
+    eff_color = "#1d9e75"
+    eff_vals = plot["유효강수일수(일)"].fillna(0).tolist()
+    # ≥15 인 막대만 텍스트 라벨 표시
+    text_vals = [(f"{int(v)}" if (v is not None and v >= 15) else "")
+                 for v in eff_vals]
+
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(
+        x=plot["연월"], y=eff_vals,
+        marker=dict(color=theme.hex_alpha(eff_color, 0.85),
+                    line=dict(color=eff_color, width=0.5)),
+        text=text_vals,
+        textposition="outside",
+        textfont=dict(size=10, color=eff_color, family="Arial Black"),
+        cliponaxis=False,
+        hovertemplate="%{x}<br>%{y:.0f} 일<extra></extra>",
+    ))
+    fig2.update_layout(
+        height=270,
+        xaxis_title="", yaxis_title="유효강수일수 (일)",
+        margin=dict(t=14, b=8, l=50, r=10),
+        font=dict(size=11),
+        showlegend=False,
+        bargap=0.1,
+        # v1.2.10: 명시적 X 범위 제거 — 위 강수량 차트와 동일한 자동 패딩 적용 →
+        #          첫/마지막 막대가 잘리지 않고 같은 폭으로 표시됨.
+        # Y축: 0~15, 눈금 0/2/4/.../14, 15 이상은 막대 위 라벨로 표기
+        yaxis=dict(
+            range=[0, 15],
+            tickmode="array",
+            tickvals=[0, 2, 4, 6, 8, 10, 12, 14],
+            ticktext=["0", "2", "4", "6", "8", "10", "12", "14"],
+        ),
+    )
+    st.plotly_chart(fig2, use_container_width=True,
+                    key=f"t5_aws_10y_eff_{aws_name}")
 
 
 # ==============================================================================
@@ -672,7 +752,7 @@ def _render_12month_chart(table: pd.DataFrame, metric_label: str, unit: str,
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name=avg_legend, x=xs, y=avg,
-        marker=dict(color=_hex_alpha(color, 0.18),
+        marker=dict(color=theme.hex_alpha(color, 0.18),
                     line=dict(color=color, width=1.5)),
         text=[(f"{v:.{decimals}f}" if v is not None else "") for v in avg],
         textposition="outside",
@@ -843,7 +923,7 @@ def _render_monthly_boxplot(day_df: pd.DataFrame, base_date: date,
         marker=dict(color=station_color, size=3,
                     line=dict(width=0.5, color="#0e3a73")),
         line=dict(color="#0e3a73", width=1.2),
-        fillcolor=_hex_alpha(station_color, 0.30),
+        fillcolor=theme.hex_alpha(station_color, 0.30),
         boxmean=True,           # 평균선 표시
         boxpoints="outliers",   # 이상치만 점으로
         hovertemplate="%{x}<br>EL: %{y:.2f} m<extra></extra>",

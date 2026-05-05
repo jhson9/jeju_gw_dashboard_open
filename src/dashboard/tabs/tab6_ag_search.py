@@ -344,13 +344,7 @@ def _render_search_map(df: pd.DataFrame) -> None:
 #    재주입이 발생하지 않음 → 흰 깜박임·탭 점프 원천 차단.
 # ─────────────────────────────────────────────────────────────────────
 @st.fragment
-def render(
-    ag_master_df: pd.DataFrame | None = None,
-    ag_usage_df: pd.DataFrame | None = None,
-    ag_wq_df: pd.DataFrame | None = None,
-    periods: dict | None = None,
-    asos_df: pd.DataFrame | None = None,
-) -> None:
+def render() -> None:
     # 결과 표 selection 하이라이트 약화 CSS 는 Phase 3 P2 에서 theme.py 의
     # GLOBAL_CSS 로 이전됨 (apply_theme() 으로 1회 주입, fragment_rerun 마다
     # 중복 누적 차단).
@@ -361,7 +355,7 @@ def render(
         unsafe_allow_html=True,
     )
 
-    df = ag_master_df if ag_master_df is not None else ag_well_loader.load_master(active_only=True)
+    df = ag_well_loader.load_master(active_only=True)
     if df.empty:
         st.warning("관정 마스터 자료를 찾을 수 없습니다 (master.csv).")
         return

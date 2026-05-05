@@ -246,22 +246,26 @@ def make_map(center: tuple[float, float] = (33.38, 126.55),
 
     key = (config.VWORLD_API_KEY or "").strip()
     if key:
-        # V-World WMTS 타일 (사용자 키)
+        # V-World WMTS 타일 (사용자 키).
+        # v1.2.08: 첫 화면 = 위성 + 하이브리드(라벨) 오버레이 → 3D 같은 입체감.
         base_url = f"https://api.vworld.kr/req/wmts/1.0.0/{key}"
         attr = "ⓒ V-World"
-        folium.TileLayer(
-            tiles=f"{base_url}/Base/{{z}}/{{y}}/{{x}}.png",
-            attr=attr, name="V-World 일반", overlay=False, control=True,
-            max_zoom=19,
-        ).add_to(m)
+        # 1) 위성 — 기본 base (제일 먼저 추가되는 base 가 default)
         folium.TileLayer(
             tiles=f"{base_url}/Satellite/{{z}}/{{y}}/{{x}}.jpeg",
             attr=attr, name="V-World 위성", overlay=False, control=True,
             max_zoom=19,
         ).add_to(m)
+        # 2) 하이브리드 (도로·지명 라벨) — 위성 위에 기본 ON 으로 얹어 입체감 강화
         folium.TileLayer(
             tiles=f"{base_url}/Hybrid/{{z}}/{{y}}/{{x}}.png",
             attr=attr, name="V-World 하이브리드", overlay=True, control=True,
+            max_zoom=19, show=True,
+        ).add_to(m)
+        # 3) 대체 base 들
+        folium.TileLayer(
+            tiles=f"{base_url}/Base/{{z}}/{{y}}/{{x}}.png",
+            attr=attr, name="V-World 일반", overlay=False, control=True,
             max_zoom=19,
         ).add_to(m)
         folium.TileLayer(
@@ -270,16 +274,16 @@ def make_map(center: tuple[float, float] = (33.38, 126.55),
             max_zoom=19,
         ).add_to(m)
     else:
-        # 폴백: OSM + ESRI 위성
-        folium.TileLayer(
-            "OpenStreetMap", name="일반지도 (OSM)",
-            overlay=False, control=True
-        ).add_to(m)
+        # 폴백: ESRI 위성 + OSM (위성을 default 로)
         folium.TileLayer(
             tiles=("https://server.arcgisonline.com/ArcGIS/rest/services/"
                    "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
             attr="ⓒ Esri", name="위성 (Esri)",
             overlay=False, control=True, max_zoom=19,
+        ).add_to(m)
+        folium.TileLayer(
+            "OpenStreetMap", name="일반지도 (OSM)",
+            overlay=False, control=True
         ).add_to(m)
 
     # 요청 3: 위·아래 펼쳐지지 않고 접힌 상태로 유지 → 클릭 시에만 목록 노출
@@ -317,7 +321,8 @@ def add_station_markers(m: folium.Map, station_df: pd.DataFrame,
             )
             folium.CircleMarker(
                 location=[r["lat"], r["lon"]],
-                radius=10, color="#e24b4a", weight=3,
+                # 호소 #4 — hit-area 개선: 선택 10→12.
+                radius=12, color="#e24b4a", weight=3,
                 fill=True, fill_color="#ffd1d0", fill_opacity=0.9,
                 tooltip=label,
                 popup=folium.Popup(popup, max_width=240),
@@ -330,7 +335,8 @@ def add_station_markers(m: folium.Map, station_df: pd.DataFrame,
             )
             folium.CircleMarker(
                 location=[r["lat"], r["lon"]],
-                radius=5, color="#185fa5", weight=1.5,
+                # 호소 #4 — hit-area 개선: 비선택 5→7, weight 1.5→2.
+                radius=7, color="#185fa5", weight=2,
                 fill=True, fill_color="#378ADD", fill_opacity=0.85,
                 tooltip=label,
                 popup=folium.Popup(popup, max_width=240),

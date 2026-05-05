@@ -126,22 +126,22 @@ GLOBAL_CSS = """
   div[data-testid="stRadio"] [role="radiogroup"] {
     display: flex !important;
     gap: 5px !important;
-    flex-wrap: wrap !important;          /* 폭 부족 시 자연스럽게 줄바꿈(예외용 폴백) */
+    flex-wrap: wrap !important;          /* 폭 부족 시 자연스럽게 줄바꿈 */
     justify-content: center !important;  /* 가로 중앙 정렬 */
     width: 100% !important;
   }
-  /* pill 본체 — 14개 유역이 한 줄에 들어오도록 폭 축소 */
+  /* pill 본체 — 14개 유역이 한 줄에 들어가는 선에서 적당한 크기로 조정 */
   div[data-testid="stRadio"] [role="radiogroup"] label {
-    flex: 0 0 75px !important;            /* 고정 폭 — 컨테이너 폭에 따라 늘어나지 않음 */
-    min-width: 75px !important;
+    flex: 1 1 0 !important;              /* 균등 분배, 컨테이너 폭에 맞춰 자동 축소 */
+    min-width: 58px !important;          /* 14×58 + 13×5 = 877px ≤ 892px(940-padding) */
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 0 !important;
     background: #f5f5f3 !important;
     border: 0.5px solid rgba(26,26,24,0.15) !important;
-    border-radius: 24px !important;
-    padding: 12px 7px !important;        /* 좌우 패딩 축소(10→7) */
+    border-radius: 20px !important;
+    padding: 10px 6px !important;
     margin: 0 !important;
     cursor: pointer !important;
     transition: all .15s !important;
@@ -172,9 +172,9 @@ GLOBAL_CSS = """
     text-align: center !important;
     line-height: 1 !important;
   }
-  /* 유역 글자 — 카드 날짜("2025년 11월")와 동일한 15px / weight 600 */
+  /* 유역 글자 — 한 줄 fitting과 가독성의 균형으로 14px */
   div[data-testid="stRadio"] [role="radiogroup"] label > div:last-child p {
-    font-size: 15px !important;
+    font-size: 14px !important;
     font-weight: 600 !important;
     color: inherit !important;
     margin: 0 !important;
@@ -203,12 +203,38 @@ GLOBAL_CSS = """
     .stTabs [data-baseweb="tab-list"] { display: none !important; }
   }
   @page { size: A4; margin: 15mm; }
+
+  /* ==================================================
+     Dataframe selection 하이라이트 약화 (Phase 3 P2)
+     -------------------------------------------------
+     마커 클릭 후 selected_permit 와 표 selection 이 잠시
+     다른 행을 가리킬 때의 시각 미스매치 완화. opacity 0.15
+     로 정상 클릭 피드백은 유지하면서 stale 인지는 약화.
+     셀렉터는 [data-testid="stDataFrame"] 한정 — tab4
+     (selection 미사용), tab7/tab8 (HTML 테이블) 영향 없음.
+     ※ glide-data-grid 가 canvas 기반이라 매칭 미보장 —
+       매칭 안 되면 무동작(손해 없음).
+     ※ row-pair-tight 보호 항목과는 셀렉터 분리되어 무관.
+     ================================================== */
+  [data-testid="stDataFrame"] [aria-selected="true"] {
+    background-color: rgba(24, 95, 165, 0.15) !important;
+  }
 </style>
 """
 
 
 def apply_theme():
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+
+def hex_alpha(hex_col: str, alpha: float) -> str:
+    """HEX 색상에 alpha 채널을 더한 rgba() 문자열로 변환.
+
+    예) hex_alpha("#1d9e75", 0.18) → "rgba(29,158,117,0.18)"
+    """
+    h = hex_col.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 def render_stat_card(label: str, value: str, sub: str = "",

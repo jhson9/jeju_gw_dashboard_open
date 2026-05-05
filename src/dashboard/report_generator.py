@@ -26,6 +26,7 @@ from plotly.subplots import make_subplots
 import config
 from src.analysis import effective_rainfall, watershed_mapper
 from src.collectors import gwlevel_parser
+from src.dashboard import theme
 
 
 # ==============================================================================
@@ -263,12 +264,6 @@ def _diff_html(actual, avg, decimals=1, unit=""):
     return f'<span class="{cls}">{sg}{d:.{decimals}f}{unit}</span>'
 
 
-def _hex_alpha(hex_col, alpha):
-    h = hex_col.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return f"rgba({r},{g},{b},{alpha})"
-
-
 def _fig_to_div(fig, include_plotlyjs=False):
     """Plotly Figure → HTML <div>. plotly.js 는 첫 호출에서만 CDN 로드."""
     return fig.to_html(
@@ -389,7 +384,7 @@ def _render_aws_cards(asos_df, periods):
                 f'</div>'
             )
         cards.append(
-            f'<div class="aws-card" style="border-left-color:{col};background:{_hex_alpha(col, 0.08)};">'
+            f'<div class="aws-card" style="border-left-color:{col};background:{theme.hex_alpha(col, 0.08)};">'
             f'<div class="ttl" style="color:{col};">{escape(st_name)} ({s["id"]})</div>'
             f'<div class="sub">최근 3개월 월강수량</div>'
             f'{rows_html}'
@@ -421,7 +416,7 @@ def _build_rainfall_chart(asos_df, periods, metric="rain"):
         rain_v = [effective_rainfall.get_baseline_average(monthly, half, p, sn, metric_col, n_years=n_rain)[0] for p in ps]
         fig.add_trace(go.Bar(
             name=f"과거 {n_rain}년 평균", x=xlabels, y=rain_v,
-            marker=dict(color=_hex_alpha(col, 0.18), line=dict(color=col, width=1.5)),
+            marker=dict(color=theme.hex_alpha(col, 0.18), line=dict(color=col, width=1.5)),
             text=[_fmt(v, decimals) if v is not None else "" for v in rain_v],
             textposition="outside", textfont=dict(size=9, color="#5f5e5a"),
             cliponaxis=False, showlegend=(i == 1), legendgroup="avg",
@@ -540,7 +535,7 @@ def _build_overall_diff_chart(ws_data_all, periods):
             ys.append(v)
             txt.append(f"{'+' if (v is not None and v > 0) else ''}{v:.2f}" if v is not None else "")
             base = region_color[region_map.get(w, "북부")]
-            colors.append(_hex_alpha(base, period_alpha[pk]))
+            colors.append(theme.hex_alpha(base, period_alpha[pk]))
         fig.add_trace(go.Bar(
             name=pk, x=ws_order, y=ys,
             marker=dict(color=colors, line=dict(color="rgba(255,255,255,1)", width=1)),
@@ -585,7 +580,7 @@ def _build_ws_bar(ws_df, periods, ws_col):
     fig = go.Figure()
     fig.add_trace(go.Bar(
         name=f"과거 {n_gw}년 해당월 평균", x=xlabels, y=avg_v,
-        marker=dict(color=_hex_alpha(ws_col, 0.18), line=dict(color=ws_col, width=1.5)),
+        marker=dict(color=theme.hex_alpha(ws_col, 0.18), line=dict(color=ws_col, width=1.5)),
         text=[f"{v:.2f}" if v is not None else "" for v in avg_v],
         textposition="outside", textfont=dict(size=9, color="#5f5e5a"),
         cliponaxis=False,
@@ -719,7 +714,7 @@ def _build_stations_chart_table(sel, periods, station_df, ws_to_stations):
             v = stn_data[stn][pk]["actual"]
             ys.append(v)
             txt.append(f"{v:.2f}" if v is not None else "")
-            colors.append(_hex_alpha(station_colors[stn], period_alpha[pk]))
+            colors.append(theme.hex_alpha(station_colors[stn], period_alpha[pk]))
         fig.add_trace(go.Bar(
             name=pk, x=stations, y=ys,
             marker=dict(color=colors, line=dict(color="rgba(255,255,255,1)", width=1)),

@@ -214,8 +214,16 @@ def run_full_day_pipeline(verbose: bool = True) -> dict:
     """
     config.ensure_directories()
 
+    # 모든 prefix(JD/JH/JI/JM/JP/JQ/JR/JW/PW 등) 포괄, 임시·정보 파일 제외
     src_dir = config.ROW_DATA_DAY_DIR
-    files = sorted(list(src_dir.glob("JD*.xls")) + list(src_dir.glob("JD*.xlsx")))
+    files: list[Path] = []
+    for pat in ("*.xls", "*.xlsx"):
+        for p in src_dir.glob(pat):
+            n = p.name
+            if n.startswith("~$") or n.startswith("0_"):
+                continue
+            files.append(p)
+    files = sorted(files)
 
     if not files:
         if verbose:

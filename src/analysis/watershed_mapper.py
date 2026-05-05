@@ -72,29 +72,45 @@ def load_station_to_watershed_map(verbose: bool = False) -> dict:
             f"컬럼 목록: {list(df.columns)}"
         )
 
-    # "유역" 접미사 제거
-    df["수역"] = df["유역명"].astype(str).str.replace("유역", "", regex=False).str.strip()
+    # "유역"/"수역" 접미사 제거 (실제 데이터에 두 표기 혼재 — 예: "조천수역")
+    raw = df["유역명"].astype(str).str.strip()
+    norm = (
+        raw.str.replace("유역", "", regex=False)
+           .str.replace("수역", "", regex=False)
+           .str.strip()
+    )
+    df["수역"] = norm
 
     # config.WATERSHEDS 에 있는 수역만 유효한 것으로 간주
     valid_watersheds = {w["name"] for w in config.WATERSHEDS}
 
     mapping = {}
     unmatched = []
+    missing = []
     for _, row in df.iterrows():
         station = str(row["관측소명"]).strip()
+        ws_raw = str(row.get("유역명", "")).strip()
         watershed = str(row["수역"]).strip()
+
+        # 유역 정보 자체가 비어있는 케이스 (NaN/공백) — 향후 보강 예정
+        if not ws_raw or ws_raw.lower() in ("nan", "none"):
+            missing.append(station)
+            continue
 
         if watershed in valid_watersheds:
             mapping[station] = watershed
         else:
-            unmatched.append((station, watershed))
+            unmatched.append((station, ws_raw))
 
     if verbose:
         print(f"📍 관측소 → 수역 매핑 로드 완료: {len(mapping)}개 관측소")
+        if missing:
+            print(f"ℹ️ 유역명 누락 (JD관측망 정보 보강 필요): {len(missing)}개")
+            print(f"   (샘플) {missing[:8]}{'...' if len(missing) > 8 else ''}")
         if unmatched:
-            print(f"⚠️ 매칭 안된 관측소 {len(unmatched)}개:")
-            for s, w in unmatched:
-                print(f"   {s} → '{w}' (config에 없는 수역)")
+            print(f"⚠️ config 와 매칭 안된 관측소: {len(unmatched)}개")
+            for s, w in unmatched[:5]:
+                print(f"   {s} → '{w}'")
 
     return mapping
 
