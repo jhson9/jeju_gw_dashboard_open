@@ -811,6 +811,7 @@ def build_search_map(
         s = str(v).strip()
         return "" if s in ("nan", "None", "NaN", "<NA>") else s
 
+    palette = getattr(config, "AG_PALETTE", {"seogwipo": "#C65911", "jeju": "#305496"})
     for _, r in df_xy.iterrows():
         permit = r.get("permit_no") or ""
         well_id = r.get("well_id") or permit
@@ -822,7 +823,7 @@ def build_search_map(
         # (시각 차이는 미미하나 클릭 정밀도 큰 개선).
         radius = 12 if is_sel else 7
         auth = r.get("authority") or ""
-        color = config.AG_PALETTE.get(auth, "#7F7F7F")
+        color = palette.get(auth, "#7F7F7F")
         edge  = "#C00000" if is_sel else color
 
         # 2줄 구성: 관정명(굵게) / 읍면 리
