@@ -1,7 +1,36 @@
 # 📌 다음 작업 메모
 
-> **작업 중단일**: 2026-04-26
+> **마지막 업데이트**: 2026-05-06 (1시간 휴식 후 복귀 예정)
 > **이 파일의 용도**: 다음 작업 시작 시점에 빠르게 맥락 복구
+
+---
+
+## 🚦 즉시 복귀용 체크포인트 (2026-05-06)
+
+### 직전 작업: 태블릿 반응형 회귀 8단계 추적 → Build 2.8 로 해결
+- 커밋: `60a3d67` "feat: 태블릿 가로 반응형 + 한글 클리핑 해소 (Build 2.2 → 2.8)"
+- **Local 커밋만 완료, push 는 안 함** (사용자 인터넷 불안정 → 1시간 뒤 직접 push)
+- working tree: clean
+
+### ✅ 1시간 뒤 첫 작업 (이어서 할 것)
+1. **`git push origin main`** — Streamlit Cloud 자동 배포 트리거
+2. 배포 완료 후 (1~2분) Tab S10+ 와 Chrome 양쪽에서 실사용 검증
+3. Samsung Internet 사용 시 **하드 리프레시** 필수 (캐시 공격적)
+4. 검증 통과 시 → 다음 단계 (B 또는 C 선택)
+   - B. PC 본판 (`C:\python\jeju_groundwater_dashboard`) 으로 동일 변경 역이전
+   - C. 새 기능 / TODO 미완료 항목
+
+### 📚 새로 추가된 문서·스킬·메모리 (다음 세션부터 자동 활용됨)
+- `docs/development_workflow.md` — PC → OPEN → 태블릿 3단계 개발 워크플로
+- `docs/design_review_tab_s10.md` — 디자인 에이전트의 Tab S10+ 분석 보고서
+- `.claude/skills/responsive-development/` — 반응형 작업 시 자동 로드 스킬 (gitignored)
+- 메모리 5건 (project / feedback) — Chrome 우선, 3팀 검증, Streamlit 셀렉터 등
+
+### 🌐 새로 적용된 정책
+- 휴대폰(<600px): 공식 비지원
+- 태블릿 가로(1025–1499.99px): 2차 타깃, 1280px 컨테이너
+- PC 데스크톱(≥1500px): 1차 타깃, 940px 디자인 보존
+- **브라우저 우선순위: Chrome 1차 > Samsung Internet 2차**
 
 ---
 
