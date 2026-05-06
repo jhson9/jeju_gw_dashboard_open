@@ -253,6 +253,47 @@ GLOBAL_CSS = """
     iframe[title^="streamlit_folium"] {
       max-height: 540px !important;
     }
+    /* 입력 위젯 — Build 2.8: 진짜 누락 셀렉터 fix.
+       에이전트 분석: baseweb 의 닫힌 상태 표시값은 <input> 이 아니라 sibling
+       <div id="..-singleValue"> (StyledSingleValue) 가 carry. input 만 잡으면
+       표시값에 cascade 안 닿음. singleValue 셀렉터 명시 추가 + padding 0. */
+    .stSelectbox div[data-baseweb="select"] {
+      min-height: 48px !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+      min-height: 48px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding-top: 4px !important;
+      padding-bottom: 4px !important;
+    }
+    .stSelectbox div[data-baseweb="select"],
+    .stSelectbox div[data-baseweb="select"] *:not(svg):not(path) {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      overflow: visible !important;
+    }
+    /* baseweb 닫힌 상태 표시값 — input + singleValue + select-control 4중 보강 */
+    .stSelectbox div[data-baseweb="select"] input,
+    .stSelectbox div[data-baseweb="select"] input[role="combobox"],
+    .stSelectbox div[data-baseweb="select"] [role="combobox"],
+    .stSelectbox div[data-baseweb="select"] div[id$="-singleValue"],
+    .stSelectbox div[data-baseweb="select"] [data-baseweb="select-control"] > div > div {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      overflow: visible !important;
+    }
+    .stDateInput input,
+    .stTextInput input,
+    .stNumberInput input {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      min-height: 48px !important;
+    }
   }
 
   /* ===== PHONE (≤ 600px) ===== */
@@ -317,8 +358,16 @@ GLOBAL_CSS = """
     .stSelectbox, .stDateInput, .stTextInput {
       width: 100% !important;
     }
+    /* '전체' 같은 한글 받침 클리핑 방지 — font 13px + line-height 1.45 (Build 2.3) */
     .stSelectbox > div > div, .stDateInput > div > div, .stTextInput > div > div {
       min-height: 44px !important;
+      font-size: 13px !important;
+      line-height: 1.45 !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div,
+    .stSelectbox div[data-baseweb="select"] > div > div {
+      font-size: 13px !important;
+      line-height: 1.45 !important;
     }
     .stButton > button {
       min-height: 44px !important;
@@ -360,6 +409,161 @@ GLOBAL_CSS = """
       min-width: calc(50% - 8px) !important;
     }
   }
+
+  /* ====================================================================
+     TABLET LANDSCAPE (1025 ~ 1499.99px) — Build 2.4
+     --------------------------------------------------------------------
+     Galaxy Tab S10+ landscape (~1400~1500px CSS), iPad Pro 13" landscape,
+     일반 10~13인치 태블릿 가로 모드를 정조준한 분기.
+     - 컨테이너를 1280px 까지 확장하여 940px 데스크톱 대비 좌우 여백 ↓
+     - 모든 텍스트/위젯을 한국어 가독성 기준에 맞게 1~2pt 확대
+     - 데스크톱(≥1500px) 은 940px 그대로 유지 (별도 가드)
+     - Tab S10+ 가 viewport=1367+px 를 보고할 가능성이 있어 상한을 1499.99 로
+       확장 (Build 2.4). 일반 PC 모니터는 1920px+ 라 영향 없음.
+     - 분수 px(예: DPR 스케일링으로 1499.5px) 갭 방지를 위해 1499.99 까지
+
+     ※ 명시적으로 손대지 않는 것:
+       1) Folium iframe 높이 — Python 측에서 height=430(컴팩트)/780(풀) 등
+          명시 px 로 넘기는 의도를 CSS 로 덮으면 깨짐. (검증 A/B 합의)
+       2) 탭바 font-size/padding — app.py 의 인라인 <style> (15.4px / 9px 11px)
+          가 더 늦게 로드되어 어차피 이김. cascade 충돌 방지.
+     -------------------------------------------------------------------- */
+  @media (min-width: 1025px) and (max-width: 1499.99px) {
+    .main .block-container,
+    [data-testid="stMain"] .block-container,
+    section.main > div.block-container {
+      max-width: 1280px !important;
+      width: 96% !important;
+      padding-left: 1.5rem !important;
+      padding-right: 1.5rem !important;
+      padding-top: 0.1rem !important;
+    }
+    /* 제목 위계 — 940px 디자인보다 확실히 큼 */
+    h1 { font-size: 24px !important; line-height: 1.25 !important; }
+    h2 { font-size: 19px !important; }
+    h3 { font-size: 17px !important; }
+    h4 { font-size: 15px !important; }
+    /* 본문 — 한국어 14px 가독성 확보 */
+    .stMarkdown p, .stMarkdown li {
+      font-size: 14px !important;
+      line-height: 1.55 !important;
+    }
+    .stCaption, [data-testid="stCaptionContainer"] { font-size: 12px !important; }
+    /* 탭바 — 터치 타깃만 보강 (font-size/padding 은 app.py 인라인이 우선) */
+    .stTabs [data-baseweb="tab"] {
+      min-height: 40px !important;
+    }
+    /* 14 유역 라디오 — 78×14 + 5×13 = 1157px ≤ 1216px(1280-padding).
+       1025~1252px 의 좁은 사브밴드는 wrap 으로 자연 줄바꿈 (graceful). */
+    div[data-testid="stRadio"] [role="radiogroup"] label {
+      min-width: 78px !important;
+      padding: 11px 8px !important;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label > div:last-child p {
+      font-size: 14px !important;
+    }
+    /* KPI 메트릭 카드 — Streamlit 기본 위젯만 (인라인 KPI 카드는 영향 X) */
+    [data-testid="stMetricLabel"] { font-size: 13px !important; }
+    [data-testid="stMetricValue"] { font-size: 26px !important; }
+    [data-testid="stMetricDelta"] { font-size: 12px !important; }
+    /* 커스텀 stat-card (theme.render_stat_card) 의 value 영역 — 클래스 hook 사용.
+       tab7:362, tab8:898 등 인라인 22px KPI 카드(class 없음)는 영향 X. */
+    .stMarkdown div.stat-card > div:nth-child(2) {
+      font-size: 18px !important;
+    }
+    /* 입력 위젯 — Build 2.8: 진짜 누락 셀렉터 fix (에이전트 진단 반영).
+       baseweb 의 닫힌 상태 표시값은 <input> 이 아니라 sibling
+       <div id="..-singleValue"> (StyledSingleValue) 가 carry.
+       input + singleValue + select-control 4중 보강으로 cascade 보장. */
+    .stSelectbox > div > div,
+    .stDateInput > div > div,
+    .stTextInput > div > div,
+    .stNumberInput > div > div {
+      min-height: 48px !important;
+    }
+    .stSelectbox div[data-baseweb="select"] {
+      min-height: 48px !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+      min-height: 48px !important;
+      display: flex !important;
+      align-items: center !important;
+      padding-top: 4px !important;
+      padding-bottom: 4px !important;
+    }
+    .stSelectbox div[data-baseweb="select"],
+    .stSelectbox div[data-baseweb="select"] *:not(svg):not(path) {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      overflow: visible !important;
+    }
+    /* baseweb 닫힌 상태 표시값 — input + singleValue + select-control 4중 보강 */
+    .stSelectbox div[data-baseweb="select"] input,
+    .stSelectbox div[data-baseweb="select"] input[role="combobox"],
+    .stSelectbox div[data-baseweb="select"] [role="combobox"],
+    .stSelectbox div[data-baseweb="select"] div[id$="-singleValue"],
+    .stSelectbox div[data-baseweb="select"] [data-baseweb="select-control"] > div > div {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      overflow: visible !important;
+    }
+    /* DateInput / TextInput / NumberInput */
+    .stDateInput input,
+    .stTextInput input,
+    .stNumberInput input {
+      font-size: 12px !important;
+      line-height: 1.8 !important;
+      min-height: 48px !important;
+    }
+    .stButton > button[kind="primary"] {
+      min-height: 48px !important;       /* Build 2.7: 62 → 48 (사용자 피드백) */
+      font-size: 14px !important;
+      padding: 8px 18px !important;
+    }
+    /* 표 — Plotly chart 와의 시각 무게 균형 */
+    [data-testid="stDataFrame"] { font-size: 13px !important; }
+    [data-testid="stTable"] td,
+    [data-testid="stTable"] th {
+      font-size: 13px !important;
+      padding: 6px 8px !important;
+    }
+    .main .block-container table { font-size: 13px !important; }
+    .main .block-container table th,
+    .main .block-container table td { padding: 6px 8px !important; }
+    /* Plotly 라벨 ↑ */
+    .js-plotly-plot .gtitle { font-size: 15px !important; }
+    .js-plotly-plot .xtick text,
+    .js-plotly-plot .ytick text { font-size: 12px !important; }
+    .js-plotly-plot .legend text { font-size: 12px !important; }
+    .js-plotly-plot, .plotly-graph-div { width: 100% !important; }
+    /* 헤더 위 여백 정리 */
+    .main .block-container > div:first-child h1 { margin-bottom: 0.4rem !important; }
+  }
+
+  /* ====================================================================
+     DESKTOP GUARD (≥ 1500px) — 940px 디자인 보존 (Build 2.4)
+     --------------------------------------------------------------------
+     기존 `.main .block-container` 규칙이 Streamlit 최신 빌드의
+     `[data-testid="stMain"] .block-container` 를 잡지 못해 데스크톱에서도
+     스타일이 새던 문제 보강. PC 모니터에서는 940px 디자인 그대로.
+     padding 도 함께 재선언 — 본 GLOBAL_CSS 상단의 .main .block-container
+     규칙이 modern selector 를 못 잡으면 padding 까지 누락되기 때문.
+     하한이 1500px 인 이유: Tab S10+ 같은 큰 태블릿(~1450px)을 태블릿 분기로
+     끌어와 한글 클리핑/폰트 작음 문제를 잡기 위함.
+     -------------------------------------------------------------------- */
+  @media (min-width: 1500px) {
+    [data-testid="stMain"] .block-container,
+    section.main > div.block-container {
+      max-width: 940px !important;
+      padding-left: 1.5rem !important;
+      padding-right: 1.5rem !important;
+      padding-top: 0.1rem !important;
+    }
+  }
 </style>
 """
 
@@ -381,8 +585,10 @@ def hex_alpha(hex_col: str, alpha: float) -> str:
 def render_stat_card(label: str, value: str, sub: str = "",
                      color: str = None, container=None) -> None:
     border_color = color if color else "transparent"
+    # class="stat-card" 는 태블릿 분기에서 value 영역을 18px 로 키우는 훅.
+    # tab7/tab8 의 인라인 KPI 카드(22px)는 이 클래스가 없어 영향받지 않음.
     html = (
-        f'<div style="background:#f5f5f3;border-radius:8px;'
+        f'<div class="stat-card" style="background:#f5f5f3;border-radius:8px;'
         f'padding:0.75rem 0.875rem;border-left:2px solid {border_color};'
         f'margin-bottom:8px;">'
         f'<div style="font-size:10.5px;color:#5f5e5a;font-weight:500;">{label}</div>'
