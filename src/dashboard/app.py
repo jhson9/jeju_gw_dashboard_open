@@ -89,6 +89,18 @@ st.set_page_config(
 )
 
 # ==============================================================================
+#  모바일 뷰포트 메타 태그 — 모바일 브라우저가 페이지 폭을 디바이스 폭으로 인식
+#  하도록 강제. 이게 없으면 모바일 사파리/크롬이 "데스크톱 폭 980px"로 가정해
+#  글자가 작게 보이고 가로 스크롤이 생김. theme.py 의 @media 쿼리도 함께
+#  의도대로 작동.
+# ==============================================================================
+st.markdown(
+    '<meta name="viewport" '
+    'content="width=device-width, initial-scale=1.0, viewport-fit=cover">',
+    unsafe_allow_html=True,
+)
+
+# ==============================================================================
 #  Streamlit Cloud stale-cache 방지 (commit 1435fa9 의 패턴을 일반화)
 #  ----------------------------------------------------------------------------
 #  배포 환경에서 이전 실행의 .pyc / @st.cache_data 결과가 남아 신규 코드와
@@ -551,6 +563,11 @@ _components.html("""
     if (saved === active) { showTabs(); return true; }
     suppressRogue = true;
     tabs[saved].click();
+    // 모바일/태블릿에서 가로 스크롤 탭 영역의 active 탭이 화면 밖에 있을 수 있어
+    // 자동으로 화면 안으로 가져온다. 데스크톱에서도 무해.
+    try {
+      tabs[saved].scrollIntoView({inline: 'center', block: 'nearest'});
+    } catch (e) { /* 구형 브라우저 무시 */ }
     setTimeout(() => { suppressRogue = false; showTabs(); }, 60);
     return false;
   }

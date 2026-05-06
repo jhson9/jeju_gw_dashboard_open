@@ -219,6 +219,147 @@ GLOBAL_CSS = """
   [data-testid="stDataFrame"] [aria-selected="true"] {
     background-color: rgba(24, 95, 165, 0.15) !important;
   }
+
+  /* ==================================================================
+     모바일/태블릿 반응형 (Build 2.1)
+     ------------------------------------------------------------------
+     기획·디자인 에이전트 합의 사양:
+       Phone   ≤  600px : Galaxy S23 등 — 스택 + 가로스크롤 탭
+       Tablet  601–1024 : Galaxy Tab S10+ 세로 등 — 컴팩트
+       Desktop ≥ 1025px : 기본 940px 레이아웃 유지
+     원칙: 텍스트 가시성 유지, 터치 타깃 ≥44px, 차트/지도는 가로폭 100%.
+     ================================================================== */
+
+  /* ===== TABLET (601 ~ 1024px) ===== */
+  @media (min-width: 601px) and (max-width: 1024px) {
+    .main .block-container {
+      max-width: 96% !important;
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    .stTabs [data-baseweb="tab"] {
+      font-size: 12px !important;
+      padding: 6px 10px !important;
+    }
+    /* KPI/지표 컬럼 — 폭 좁을 때 자연 줄바꿈 */
+    [data-testid="stHorizontalBlock"] {
+      flex-wrap: wrap !important;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label {
+      min-width: 52px !important;
+      font-size: 13px !important;
+    }
+    /* Folium iframe 적정 높이 */
+    iframe[title^="streamlit_folium"] {
+      max-height: 540px !important;
+    }
+  }
+
+  /* ===== PHONE (≤ 600px) ===== */
+  @media (max-width: 600px) {
+    /* 본문 폭 — 좌우 여백 최소화 */
+    .main .block-container {
+      max-width: 100% !important;
+      padding-left: 0.6rem !important;
+      padding-right: 0.6rem !important;
+    }
+
+    /* 페이지 제목 — 살짝 축소 */
+    h1 { font-size: 18px !important; }
+    h2 { font-size: 16px !important; }
+    h3 { font-size: 14px !important; }
+
+    /* ── 탭 리스트 ──
+       10개 탭을 한 줄에 못 담으므로 가로 스크롤 + 스냅.
+       텍스트는 그대로 유지(축약하면 어떤 탭인지 식별 어려움). */
+    .stTabs [data-baseweb="tab-list"] {
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+      gap: 4px !important;
+      padding: 4px 2px !important;
+      margin-bottom: 0.75rem !important;
+      scrollbar-width: none;
+    }
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+    .stTabs [data-baseweb="tab"] {
+      font-size: 11.5px !important;
+      padding: 8px 10px !important;
+      flex: 0 0 auto !important;
+      scroll-snap-align: start;
+      min-height: 36px !important;
+    }
+
+    /* ── 컬럼 강제 스택 ──
+       대부분의 화면에서 st.columns([..]) 가 가로 비율로 잡혀있음.
+       Phone 에서는 모두 100% 너비로 수직 배치. */
+    [data-testid="stHorizontalBlock"] {
+      flex-wrap: wrap !important;
+      gap: 6px !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+      flex: 1 1 100% !important;
+      min-width: 100% !important;
+      width: 100% !important;
+    }
+
+    /* ── 라디오 (유역 14개) ── */
+    div[data-testid="stRadio"] [role="radiogroup"] label {
+      min-width: 64px !important;
+      padding: 10px 8px !important;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label > div:last-child p {
+      font-size: 13px !important;
+    }
+
+    /* ── 입력 위젯 — 터치 타깃 ≥44px ── */
+    .stSelectbox, .stDateInput, .stTextInput {
+      width: 100% !important;
+    }
+    .stSelectbox > div > div, .stDateInput > div > div, .stTextInput > div > div {
+      min-height: 44px !important;
+    }
+    .stButton > button {
+      min-height: 44px !important;
+      font-size: 13px !important;
+      padding: 10px 14px !important;
+    }
+    /* 파스텔 pill 버튼만은 기존 작은 크기 유지 — wbtn 류 */
+    div[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"] {
+      min-height: 36px !important;
+    }
+
+    /* ── 표 ── */
+    [data-testid="stDataFrame"], [data-testid="stTable"] {
+      max-width: 100% !important;
+      overflow-x: auto !important;
+    }
+
+    /* ── Plotly 차트 ── */
+    .js-plotly-plot, .plotly-graph-div {
+      width: 100% !important;
+    }
+
+    /* ── Folium 지도 ── */
+    iframe[title^="streamlit_folium"] {
+      width: 100% !important;
+      max-height: 460px !important;
+    }
+
+    /* ── 헤더의 베이스라인 pill 배지 ── */
+    .stMarkdown span[style*="border-radius:14px"] {
+      font-size: 10px !important;
+    }
+  }
+
+  /* ===== 가로 모드 폰 / 작은 태블릿 (601 ~ 800) — KPI 2열 ===== */
+  @media (min-width: 601px) and (max-width: 900px) {
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:has([data-testid="stMetric"]) {
+      flex: 1 1 calc(50% - 8px) !important;
+      min-width: calc(50% - 8px) !important;
+    }
+  }
 </style>
 """
 
