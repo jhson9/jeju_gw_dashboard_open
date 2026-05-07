@@ -79,3 +79,15 @@ logs/
 
 # --- 임시 추출 폴더 ---
 temp_extract/
+
+# --- 로컬 백업 파일 (이전 버전 보관용) ---
+# 데이터 파일을 갱신하기 전 *_old.xlsx 식으로 백업한 경우 git 추적 제외
+*_old.xlsx
+*_old.xls
+*_old.csv
+*_backup.*
+
+# --- 본인 작업 메모 (외부 공개 X) ---
+필독사항.txt
+작업메모.txt
+TODO_personal.txt
