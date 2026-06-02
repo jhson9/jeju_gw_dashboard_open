@@ -29,6 +29,39 @@ from src.drone import (
     DsmSampler,
     ImageOverlayProvider,
 )
+
+# ──────────────────────────────────────────────────────────────────
+#  folium monkey-patch — `/app/static/...` 절대 경로 URL 인정 (2026-06-02 v4)
+# ------------------------------------------------------------------
+#  folium.utilities._is_url() 은 scheme 가 http/https/ftp/data 인 경우만 URL
+#  로 인정 → `/app/static/drone_assets/...` 같은 same-origin 절대 경로는
+#  파일 시스템 경로로 오해되어 ImageOverlay 가 open(image,"rb") 시도 →
+#  PermissionError [Errno 13]. Cloud 환경 `/app/static/` 은 브라우저에서만
+#  유효한 same-origin URL 이므로 Python 단에선 file open 시도 자체를 막아야 함.
+#  → `/` 로 시작하면 URL 로 취급하도록 패치.
+# ──────────────────────────────────────────────────────────────────
+try:
+    import folium.utilities as _folium_utils
+    _orig_is_url = _folium_utils._is_url
+
+    def _patched_is_url(url):
+        if isinstance(url, str) and url.startswith("/"):
+            return True   # same-origin absolute path → URL 로 취급
+        return _orig_is_url(url)
+
+    if getattr(_folium_utils._is_url, "__name__", "") != "_patched_is_url":
+        _folium_utils._is_url = _patched_is_url
+        # folium.raster_layers 등 다른 모듈도 import-time 에 별칭으로 보유 가능 →
+        # 명시적 재바인딩.
+        try:
+            import folium.raster_layers as _folium_raster
+            if hasattr(_folium_raster, "_is_url"):
+                _folium_raster._is_url = _patched_is_url
+        except ImportError:
+            pass
+except ImportError:
+    pass
+
 from src.drone.preview import get_or_make_preview, preview_path
 from src.drone.providers import make_drone_url
 from src.drone.registry import Mission
