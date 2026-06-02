@@ -294,7 +294,9 @@ def render() -> None:
     _t, _q = st.columns([10, 1])
     with _t:
         st.markdown(
-            '<p class="tab-title" style="margin:0;">32.정사영상 분석</p>',
+            '<p class="tab-title" style="margin:0;">32.정사영상 분석 '
+            '<span style="font-size:0.55em;color:#888;font-weight:normal;">'
+            'V1.0.1 · 2026-06-02 13:30 KST</span></p>',
             unsafe_allow_html=True,
         )
     with _q:
