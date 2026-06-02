@@ -6,7 +6,11 @@ runOnSave = true
 # localhost only — Network/External URL 표시 차단. LAN/외부 노출 위험 0.
 # pdf_server (8766) 도 127.0.0.1 라 일관성 유지.
 address = "127.0.0.1"
-# enableStaticServing 미설정 — 부모 config 의 true 가 그대로 적용.
+# 2026-06-02 v4 fix: enableStaticServing 명시 = true.
+# 1.47.1 기본값은 false. 명시 안 하면 Cloud /app/static/drone_assets/...
+# /app/static/drone_viewer/... URL 이 작동 안 함 → 32탭 정사영상 안 보임 +
+# 34탭 iframe 무한 로딩.
+enableStaticServing = true
 # 1GB hard limit 은 streamlit/bootstrap.py:35 의 하드코드 상수라 우회 불가.
 # 대용량 PDF 는 src/dashboard/pdf_server.py (port 8766) 가 서빙.
 
