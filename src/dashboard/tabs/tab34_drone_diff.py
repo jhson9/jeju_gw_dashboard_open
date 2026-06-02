@@ -53,10 +53,10 @@ def render() -> None:
     with _q:
         quit_button("quit_in_tab34")
 
-    # 2026-06-02 v3 fix: Cloud 환경에서도 활성화.
-    # url_for_diff_viewer() 가 /app/static/drone_viewer/diff_viewer.html 사용.
-    # 정사영상은 /app/static/drone_assets/{미션}/derived/preview.png same-origin.
-    # 가드 제거됨.
+    # 2026-06-02 v3.2: 진짜 원인 발견 — 이전 앱 크래시는 가드 제거가 아니라
+    # tab34_drone_diff.py:326 의 truncation (`use_container_width=T`) 였음.
+    # truncation 복구 후 가드 제거 안전. url_for_diff_viewer 가 Cloud 분기로
+    # /app/static/drone_viewer/diff_viewer.html same-origin 사용.
 
     reg = get_registry()
     if len(reg) == 0:
