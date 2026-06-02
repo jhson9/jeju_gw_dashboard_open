@@ -53,10 +53,13 @@ def render() -> None:
     with _q:
         quit_button("quit_in_tab34")
 
-    # 2026-06-02 v3 fix: Cloud 환경에서도 활성화.
-    # url_for_diff_viewer() 가 /app/static/drone_viewer/diff_viewer.html 사용.
-    # 정사영상은 /app/static/drone_assets/{미션}/derived/preview.png same-origin.
-    # 가드 제거됨.
+    # Cloud 환경 가드 — pdf_server :8766 localhost-only (2026-06-02).
+    if is_cloud_env():
+        render_cloud_unavailable_notice(
+            "34.시계열 분석(2D)",
+            missing_feature="좌·우 분할 정사영상 동기화 뷰어 (diff_viewer.html)",
+        )
+        return
 
     reg = get_registry()
     if len(reg) == 0:
