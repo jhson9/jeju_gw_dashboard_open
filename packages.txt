@@ -1,1 +1,0 @@
-# Streamlit Cloud apt packages - rasterio wheel includes GDAL, no apt deps needed
