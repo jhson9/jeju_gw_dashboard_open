@@ -46,10 +46,25 @@ PDF_DATA_DIR     = config.WELL_CARD_DIR
 DRILLING_PDF_DIR = config.DRILLING_LOG_DIR
 INDEX_PATH       = PDF_DATA_DIR / "index.json"
 
-# URL 베이스 — pdf_server (port 8766) 의 화이트리스트 prefix.
-# DATA_SOURCES dict 를 단일 진실 원천으로 사용해 URL/디스크 경로 동기 유지.
-WELL_CARD_URL_BASE = pdf_server.DATA_SOURCES["well_card"].url_base
-DRILLING_URL_BASE  = pdf_server.DATA_SOURCES["drilling_log"].url_base
+# URL 베이스 — 2026-06-02 Cloud 호환 fix.
+#   * 로컬 dev: pdf_server (127.0.0.1:8766) 의 화이트리스트 prefix (기존 동작)
+#   * Streamlit Cloud: pdf_server 는 사용자 브라우저에서 도달 불가 (localhost-only).
+#                       대신 GitHub LFS raw URL 로 직접 fetch.
+# DATA_SOURCES dict 는 로컬 경로 동기화의 단일 진실 원천으로 그대로 유지.
+try:
+    from src.dashboard.tabs._drone_helpers import is_cloud_env
+    _IN_CLOUD = is_cloud_env()
+except Exception:  # noqa: BLE001
+    _IN_CLOUD = False
+
+if _IN_CLOUD:
+    # GitHub LFS raw URL — well_card 2025년 PDF push 되어 있음.
+    _GH_RAW = "https://github.com/jhson9/jeju_gw_dashboard_open/raw/main/data/02_well"
+    WELL_CARD_URL_BASE = f"{_GH_RAW}/well_card"
+    DRILLING_URL_BASE  = f"{_GH_RAW}/drilling_log"
+else:
+    WELL_CARD_URL_BASE = pdf_server.DATA_SOURCES["well_card"].url_base
+    DRILLING_URL_BASE  = pdf_server.DATA_SOURCES["drilling_log"].url_base
 
 
 # Build 2.0: hard link / junction 동기화 함수들은 모두 폐기.

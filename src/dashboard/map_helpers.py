@@ -269,48 +269,54 @@ def make_map(center: tuple[float, float] = (33.42, 126.55),
     #   - 캐시 갱신: "데이터 관리" 탭의 "🗺️ 지도 타일 캐시" 섹션에서 버튼으로 재다운로드
     #   - CDN 폴백 / Esri / OSM / 하이브리드 / 흑백 layer 는 제거 (혼란만 가중)
     #   - V-World API key 없으면 OSM 단일 폴백 (이 환경은 사실상 .env 에 키 있음)
+    # ── 2026-06-02 사용자 보고 fix: Streamlit Cloud 에서 tab05/11/12/13 회색 ──
+    # 원인: 기존엔 로컬 캐시(/app/static/map_tiles/) 를 base layer 로 default 활성.
+    #       그런데 Cloud 에 캐시 폴더가 LFS 로 push 안 됐거나 zoom 범위 밖이면
+    #       타일이 모두 404 → 회색. V-World API direct 가 있어도 overlay 였음.
+    # 해결: 32번 탭(tab32_drone_2d.py) 의 작동하는 패턴을 base layer 로 적용.
+    #       · V-World API direct (키 있을 때) — base, show=True ← Cloud 안정 동작
+    #       · OSM — base, 백업 (V-World API 실패 시 토글)
+    #       · 로컬 캐시 — overlay 로 강등 (있으면 덮어쓰기 가속, 없으면 무시)
+    key = (config.VWORLD_API_KEY or "").strip()
+
+    # 1) V-World API direct — 키 있으면 default base. 캐시 무관, Cloud 즉시 작동.
+    if key:
+        folium.TileLayer(
+            tiles=f"https://api.vworld.kr/req/wmts/1.0.0/{key}/Base/{{z}}/{{y}}/{{x}}.png",
+            attr="ⓒ V-World", name="V-World 일반",
+            overlay=False, control=True,
+            min_zoom=8, max_zoom=19, show=True,
+        ).add_to(m)
+        folium.TileLayer(
+            tiles=f"https://api.vworld.kr/req/wmts/1.0.0/{key}/Satellite/{{z}}/{{y}}/{{x}}.jpeg",
+            attr="ⓒ V-World", name="V-World 위성",
+            overlay=False, control=True,
+            min_zoom=8, max_zoom=19, show=False,
+        ).add_to(m)
+
+    # 2) OSM — base layer. 키 없으면 default, 있으면 백업 (LayerControl 에서 토글).
+    folium.TileLayer(
+        "OpenStreetMap", name="일반지도 (OSM)",
+        overlay=False, control=True,
+        show=not key,
+    ).add_to(m)
+
+    # 3) 로컬 캐시 — overlay 로 강등. 로컬 dev 환경에서 캐시가 있으면 덮어쓰기로
+    #    가속 (대역 절감). Cloud 처럼 캐시가 없으면 자연 404 (overlay 라 무해).
     local_attr = "ⓒ V-World (로컬 캐시)"
-    # default = V-World 일반.
-    # 두 base layer 모두 show=True 면 Leaflet LayerControl 이 "마지막 추가된 base"
-    # 를 활성화한다 (add_to 순서 무관). 일반을 default 로 강제하기 위해 위성에
-    # show=False 를 명시. 사용자가 LayerControl 에서 위성으로 토글 시 즉시 전환.
     folium.TileLayer(
         tiles="/app/static/map_tiles/Base/{z}/{x}/{y}.png",
-        attr=local_attr, name="V-World 일반", overlay=False, control=True,
-        min_zoom=8, max_zoom=19,
-        min_native_zoom=10, max_native_zoom=14,
-        show=True,
-    ).add_to(m)
-    folium.TileLayer(
-        tiles="/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg",
-        attr=local_attr, name="V-World 위성", overlay=False, control=True,
+        attr=local_attr, name="로컬 캐시 (일반)", overlay=True, control=True,
         min_zoom=8, max_zoom=19,
         min_native_zoom=10, max_native_zoom=14,
         show=False,
     ).add_to(m)
-
-    # V-World 로컬 캐시가 배포 환경(Streamlit Cloud) 에 없거나 zoom 범위를
-    # 벗어나면 베이스 지도가 회색으로 비어 보이는 회귀 사례 (2026-06-02
-    # 사용자 보고 — tab11/12/13 회색). 다중 안전망:
-    #   1) V-World API direct (키 있으면) — 캐시 미배포 환경에서도 자동 대체.
-    #   2) OSM 폴백 — V-World API 도 실패할 때 최후 보루.
-    key = (config.VWORLD_API_KEY or "").strip()
-    if key:
-        # V-World API direct (zoom 8~19) — overlay=True 로 캐시 위에 자동 합성.
-        # 캐시 타일이 정상이면 같은 픽셀이 덮여 시각 차이 없음, 404 면 노출됨.
-        folium.TileLayer(
-            tiles=f"https://api.vworld.kr/req/wmts/1.0.0/{key}/Base/{{z}}/{{y}}/{{x}}.png",
-            attr="ⓒ V-World", name="V-World 일반 (HD 폴백)",
-            overlay=True, control=True,
-            min_zoom=8, max_zoom=19, show=True,
-        ).add_to(m)
-    # OSM 폴백 — V-World 가 모두 실패해도 배경이 보이도록.
-    # · 키 없는 환경: show=True (첫 진입부터 OSM 노출, 이전 동작 유지)
-    # · 키 있는 환경: show=False (LayerControl 에서 토글 가능, 회색 회피용 비상망)
     folium.TileLayer(
-        "OpenStreetMap", name="일반지도 (OSM 폴백)",
-        overlay=False, control=True,
-        show=not key,
+        tiles="/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg",
+        attr=local_attr, name="로컬 캐시 (위성)", overlay=True, control=True,
+        min_zoom=8, max_zoom=19,
+        min_native_zoom=10, max_native_zoom=14,
+        show=False,
     ).add_to(m)
 
     # 요청 3: 위·아래 펼쳐지지 않고 접힌 상태로 유지 → 클릭 시에만 목록 노출
