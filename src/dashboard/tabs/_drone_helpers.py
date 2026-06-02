@@ -60,15 +60,28 @@ def is_cloud_env() -> bool:
 
     pdf_server 가 127.0.0.1:8766 에 묶여 있어 외부 사용자가 접근 불가능한
     환경(=Cloud 배포) 에서 True. tab33/34/35 가 iframe 렌더 대신 안내문 출력.
+
+    2026-06-02 fix: 이전 가드는 HOME=/home/appuser AND /mount/src 였으나
+    실제 Streamlit Cloud 컨테이너는 HOME=/home/adminuser. 더 robust 한
+    감지로 교체:
+      1) /mount/src/ 존재 단독 — Cloud 컨테이너 고유 마운트 (가장 확실)
+      2) STREAMLIT_SERVER_PORT 환경변수 — Cloud entrypoint가 설정
+      3) /home/{adminuser,appuser} 패턴 + /mount 존재
     """
     import os
+    # 1) /mount/src/ 존재 (Streamlit Cloud 고유) — 가장 확실
+    if Path("/mount/src").exists():
+        return True
+    # 2) STREAMLIT_RUNTIME_ENV 명시 환경
     if os.environ.get("STREAMLIT_RUNTIME_ENV", "").lower() == "cloud":
         return True
+    # 3) HOSTNAME 패턴
     hostname = (os.environ.get("HOSTNAME") or "").lower()
     if "streamlit" in hostname:
         return True
-    # Streamlit Community Cloud 컨테이너 흔적
-    if os.environ.get("HOME") == "/home/appuser" and Path("/mount/src").exists():
+    # 4) 컨테이너 HOME 패턴 + 마운트
+    home = os.environ.get("HOME", "")
+    if home in ("/home/appuser", "/home/adminuser") and Path("/mount").exists():
         return True
     return False
 
