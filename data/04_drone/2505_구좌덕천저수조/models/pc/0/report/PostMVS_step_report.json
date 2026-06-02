@@ -1,0 +1,23 @@
+{
+    "tasks_status": {
+        "tasks_number": 1,
+        "failed_tasks_number": 0,
+        "failed_tasks": [],
+        "all_tasks": [
+            {
+                "task_name": "PostMVS",
+                "task_id": "PostMVS_FKP33",
+                "execution_infos": [
+                    {
+                        "execution_worker_id": "Master",
+                        "return_code": 0,
+                        "execution_start_time": "2025-11-01 09:10:52",
+                        "execution_end_time": "2025-11-01 09:10:56",
+                        "finish_callback_start_time": "2025-11-01 09:10:56",
+                        "finish_callback_end_time": "2025-11-01 09:10:56"
+                    }
+                ]
+            }
+        ]
+    }
+}

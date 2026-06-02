@@ -1,0 +1,419 @@
+{
+  "_metadata": {
+    "version": "v2.0",
+    "created": "2026-05-03",
+    "verified_against": [
+      "C:\\COWORK_SPACE\\사후관리DB\\2017~2025년 서귀포시 사후관리DB자료.xlsx (9개)",
+      "C:\\COWORK_SPACE\\공공관정 수질 분석(14~23)_5항목.xlsx",
+      "C:\\\\COWORK_SPACE\\\\2017~2026_구좌광역화7공 사후관리DB자료.xlsx"
+    ],
+    "priority_rules": {
+      "data_field": "well_id > permit_no",
+      "file": "사후관리DB > wide(14-23)",
+      "sheet_conflicts": "검토 후 결정 (현재 well_id 매칭으로 자동 정정)",
+      "history_management": "모든 변경 _history.csv/json 기록"
+    },
+    "last_updated": "2026-05-08T11:48"
+  },
+  "master.csv": {
+    "source_files": {
+      "414_서귀포_5항목": {
+        "file": "공공관정 수질 분석(14~23)_5항목.xlsx + 2025 사후관리DB",
+        "verified": true
+      },
+      "488_제주시": {
+        "file": "공공관정 수질 분석(14~23)_5항목.xlsx",
+        "verified": true
+      },
+      "7_구좌광역화": {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "wells": [
+          "W201410006",
+          "W201410007",
+          "W201410008",
+          "W201410009",
+          "W201410010",
+          "W201410011",
+          "W201410012"
+        ],
+        "authority": "제주특별자치도",
+        "verified": true
+      }
+    },
+    "row_count": 909,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48"
+  },
+  "master_yearly/master_2017.csv": {
+    "source_file": "2017년 서귀포시 월별 지하수이용량 보고.xlsx",
+    "source_sheet": "Sheet1",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20,
+      "well_id_col": 2
+    },
+    "row_count": 429,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2018.csv": {
+    "source_file": "2018년 서귀포시 사후관리 DB자료.xlsx",
+    "source_sheet": "2018 월별 지하수 이용량",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 20,
+      "capacity_m3d": 19
+    },
+    "row_count": 900,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "note": "Sheet1(취수허가량 col28)과 226건 차이 있으나 이용량 시트 채택",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2019.csv": {
+    "source_file": "2019년 서귀포시 사후관리 DB(통합).xlsx",
+    "source_sheet": "4. 2018 월별 지하수 이용량",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 901,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2020.csv": {
+    "source_file": "2020년 서귀포시 사후관리 DB_1.14(이용량포함).xlsx",
+    "source_sheet": "4.지하수이용량(2020)",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 894,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2021.csv": {
+    "source_file": "2021년 서귀포시 사후관리 DB(제출용)_부록포함.xlsx",
+    "source_sheet": "4.지하수이용량(2021)",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 894,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2022.csv": {
+    "source_file": "2022년 서귀포시 사후관리 DB(최종).xlsx",
+    "source_sheet": "4.지하수 이용량(2022_12)",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 891,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2023.csv": {
+    "source_file": "2023년 서귀포시 사후관리 DB자료(부록포함) (1).xlsx",
+    "source_sheet": "4.지하수 이용량(2023_12)",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 891,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2024.csv": {
+    "source_file": "2024년 서귀포시 사후관리 DB자료(최종).xlsx",
+    "source_sheet": "4.지하수 이용량(2024_12)",
+    "header_row": 0,
+    "columns": {
+      "permit_m3m": 21,
+      "capacity_m3d": 20
+    },
+    "row_count": 889,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "master_yearly/master_2025.csv": {
+    "source_file": "2025년 서귀포시 사후관리DB자료(서귀포시 제출).xlsx",
+    "source_sheet": "이용량(원수대금)",
+    "header_row": 1,
+    "columns": {
+      "permit_m3m": 20,
+      "capacity_m3d": 19,
+      "1월": 6
+    },
+    "row_count": 894,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48",
+    "appended_sources": [
+      {
+        "file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+        "sheet": "구좌광역관정현황(7공)",
+        "rows_added": 7
+      }
+    ]
+  },
+  "usage/usage_montly_*.csv": {
+    "source_pattern": "그 해 사후관리DB의 이용량 시트",
+    "month_columns": {
+      "normal": "col 7~18 (1~12월)",
+      "2018": "col 7~17 (1~11월), 12월 보간",
+      "2025": "col 6~17 (header_row=2)"
+    },
+    "permit_col": "이용량 시트의 월허가량 컬럼 (master.csv 사용 금지)",
+    "capacity_col": "이용량 시트의 양수능력 컬럼",
+    "verified": true,
+    "last_updated": "2026-05-03T08:37"
+  },
+  "water_quality/water_quality_regular.csv": {
+    "source_file": "2025년 서귀포시 사후관리DB.xlsx",
+    "source_sheet": "수질검사(정기검사, 73공)",
+    "header_row": 1,
+    "row_count": 73,
+    "verified": true,
+    "last_updated": "2026-05-01"
+  },
+  "water_quality/water_quality_semiannual.csv": {
+    "version": "v2.0",
+    "rules": [
+      "사후관리DB > wide(14-23 5항목)",
+      "well_id > permit_no 우선 (master.csv 매핑으로 정정)",
+      "서림수원지/용천수 제외",
+      "\"불검출\" 표기 유지"
+    ],
+    "source_files_2014_2017": {
+      "file": "공공관정 수질 분석(14~23)_5항목.xlsx",
+      "sheets": {
+        "질산성질소(5항목)": "header_row=0, 2014_상=col 19",
+        "염소이온(5항목)": "header_row=0, 2014_상=col 18",
+        "PH(5항목)": "header_row=0, 2014_상=col 18",
+        "암모니아성질소(5항목)": "header_row=0, 2014_상=col 18",
+        "전기전도도(5항목)": "header_row=0, 2014_상=col 18"
+      }
+    },
+    "source_files_2018_2025_사후관리DB_우선": {
+      "2018": {
+        "sheet": "5항목 수질검사(전체)",
+        "header_row": 1,
+        "cols_상": "4,5,6,7,8 (Cl,NO3,pH,NH4,EC)",
+        "cols_하": "10,11,12,13,14"
+      },
+      "2019": {
+        "sheet": "1. 5항목 수질검사(상하반기)",
+        "header_row": 1,
+        "cols_상": "4,5,6,7,8",
+        "cols_하": "10,11,12,13,14"
+      },
+      "2020": {
+        "sheet": "1.5항목 수질검사(전체)",
+        "header_row": 1,
+        "cols_상": "4,5,6,7,8",
+        "cols_하": "10,11,12,13,14"
+      },
+      "2021": {
+        "sheet": "1.5항목 수질검사(414공)",
+        "header_row": 1,
+        "cols_상": "4,5,6,7,8",
+        "cols_하": "10,11,12,13,14"
+      },
+      "2022": {
+        "sheet": "1.5항목 수질검사(414공)",
+        "header_row": 1,
+        "cols_상": "6,7,8,9,10 (date=5)",
+        "cols_하": "13,14,15,16,17 (date=12)"
+      },
+      "2023": {
+        "sheet": "1.5항목 수질검사(414공)",
+        "header_row": 1,
+        "cols_상": "4,5,6,7,8",
+        "cols_하": "10,11,12,13,14"
+      },
+      "2024": {
+        "sheet": "1.5항목 수질검사(414공)",
+        "header_row": 1,
+        "cols_상": "5,6,7,8,9 (date=4)",
+        "cols_하": "12,13,14,15,16 (date=11)"
+      },
+      "2025": {
+        "sheet": "수질검사(사후관리, 414공)",
+        "header_row": 2,
+        "cols_순서": "NH4=4, NO3=5, pH=6, Cl=7, EC=8 (date=3)",
+        "cols_하": "NH4=11, NO3=12, pH=13, Cl=14, EC=15 (date=10)"
+      }
+    },
+    "row_count": 21250,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48"
+  },
+  "water_quality/water_quality_agricultural.csv": {
+    "version": "v1.0",
+    "description": "14~15항목 농업용수 정밀 검사 통합",
+    "rules": [
+      "사후관리DB만 사용",
+      "well_id 우선 정정 적용"
+    ],
+    "source_sheets": {
+      "2018": {
+        "sheet": "농업용수 14개",
+        "rows": 333,
+        "header_row": 0,
+        "note": "pH=3, Cl=4, NO3=5, ..."
+      },
+      "2019": {
+        "sheet": "2. 농업용수 15개항목",
+        "rows": 95,
+        "header_row": 0,
+        "note": "컬럼 순서 다름: Pb=3, As=4, Hg=5, ..."
+      },
+      "2020": {
+        "sheet": "2.농업용수 전항목(8공)",
+        "rows": 8,
+        "header_row": 0
+      },
+      "2021": {
+        "sheet": "2.농업용수 전항목(337공)",
+        "rows": 337,
+        "header_row": 0,
+        "note": "시료채취일 col 3"
+      },
+      "2022": {
+        "sheet": "2.농업용수 전항목(72공)",
+        "rows": 72,
+        "header_row": 0,
+        "note": "관정주소+시료채취일"
+      },
+      "2023": {
+        "sheet": "2.농업용수 전항목(8공)",
+        "rows": 8,
+        "header_row": 0,
+        "note": "시료채취일 col 3"
+      },
+      "2024": {
+        "sheet": "2.농업용수 전항목(333공)",
+        "rows": 333,
+        "header_row": 0
+      }
+    },
+    "fields": [
+      "pH",
+      "chloride",
+      "nitrate_n",
+      "cadmium",
+      "arsenic",
+      "cyanide",
+      "mercury",
+      "organic_p",
+      "diazinon",
+      "parathion",
+      "phenol",
+      "lead",
+      "chromium",
+      "TCE",
+      "PCE",
+      "TCA_111",
+      "judgment",
+      "exceeded"
+    ],
+    "row_count": 1624,
+    "verified": true,
+    "last_updated": "2026-05-08T11:48"
+  },
+  "gujwa_광역화_7공": {
+    "description": "구좌광역화 7공 (E-001~E-007). 제주특별자치도 관할 광역화 관정.",
+    "source_file": "2017~2026_구좌광역화7공 사후관리DB자료.xlsx",
+    "permits": [
+      "W201410006",
+      "W201410007",
+      "W201410008",
+      "W201410009",
+      "W201410010",
+      "W201410011",
+      "W201410012"
+    ],
+    "well_ids": [
+      "E-001",
+      "E-002",
+      "E-003",
+      "E-004",
+      "E-005",
+      "E-006",
+      "E-007"
+    ],
+    "authority": "제주특별자치도",
+    "years_processed": "2017~2025",
+    "sheets_used": {
+      "master": "구좌광역관정현황(7공)",
+      "usage": "이용량",
+      "wq_5": "수질검사(사후관리5항목)",
+      "wq_15": "수질검사(정기검사15항목)"
+    },
+    "note": "2026년 데이터는 본 통합에서 제외 (사용자 지시)",
+    "added_at": "2026-05-08T11:48"
+  }
+}

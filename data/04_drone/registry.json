@@ -1,0 +1,153 @@
+{
+  "version": "1.2",
+  "description": "제주 지하수 대시보드 드론 영상 미션 레지스트리. data/04_drone/ 안 미션들을 enumerate. 신규 미션 추가 시 이 파일의 missions 배열에 한 항목 추가 + 해당 폴더에 meta.json 작성. site_id 가 같은 미션들은 시계열 비교 후보로 자동 인식됨 (Phase 2). [공개판 슬림본: 3개 저수조만 등록 — 2026-06-01]",
+  "updated": "2026-06-01",
+  "default_center": [
+    33.4,
+    126.55
+  ],
+  "default_zoom": 10,
+  "site_types": [
+    "저수조",
+    "저수지",
+    "관정",
+    "수원지",
+    "기타",
+    "용천수"
+  ],
+  "sites": {
+    "jongdal_reservoir": {
+      "name": "구좌 종달리 저수조",
+      "site_type": "저수조"
+    },
+    "deokcheon_reservoir": {
+      "name": "구좌 덕천리 저수조",
+      "site_type": "저수조"
+    },
+    "seorim_spring": {
+      "name": "서림 수원지",
+      "site_type": "수원지"
+    },
+    "songdang_reservoir": {
+      "name": "송당 저수조",
+      "site_type": "저수조"
+    },
+    "yongsu_reservoir": {
+      "name": "한경면 용수 저수지",
+      "site_type": "저수지"
+    },
+    "songdang_jeosuji": {
+      "name": "구좌읍 송당 저수지",
+      "site_type": "저수지"
+    },
+    "gongcheonpo": {
+      "name": "공천포 용천수",
+      "site_type": "용천수",
+      "center_wgs84": [
+        33.266891,
+        126.640572
+      ]
+    },
+    "sehwa_reservoir": {
+      "name": "구좌 세화 저수조",
+      "site_type": "저수조",
+      "center_wgs84": [
+        33.47026,
+        126.826226
+      ]
+    }
+  },
+  "missions": [
+    {
+      "id": "2505_구좌덕천저수조",
+      "site_id": "deokcheon_reservoir",
+      "name": "구좌 덕천리 저수조",
+      "site_type": "저수조",
+      "site_category": "농업용",
+      "eup_myeon_dong": "구좌읍 덕천리",
+      "flight_date": "2025-05",
+      "data_dir": "2505_구좌덕천저수조",
+      "outputs": {
+        "tiles_2d": {
+          "available": true,
+          "kind": "image_overlay",
+          "source": "map/result.tif"
+        },
+        "tiles_3d": {
+          "available": true,
+          "tileset": "models/pc/0/terra_b3dms/tileset.json"
+        },
+        "dsm": {
+          "available": true,
+          "source": "map/dsm.tif"
+        },
+        "pointcloud_ply": {
+          "available": true
+        }
+      },
+      "comparable_with": [
+        "2605_구좌덕천저수조"
+      ]
+    },
+    {
+      "id": "2605_구좌덕천저수조",
+      "site_id": "deokcheon_reservoir",
+      "name": "구좌 덕천 저수조",
+      "site_type": "저수조",
+      "site_category": "저수조",
+      "eup_myeon_dong": "구좌읍 덕천리",
+      "flight_date": "2026-05",
+      "data_dir": "2605_구좌덕천저수조",
+      "comparable_with": [
+        "2505_구좌덕천저수조"
+      ],
+      "outputs": {
+        "tiles_2d": {
+          "available": true,
+          "kind": "image_overlay",
+          "source": "map/result.tif"
+        },
+        "tiles_3d": {
+          "available": true,
+          "tileset": "models/pc/0/terra_b3dms/tileset.json"
+        },
+        "dsm": {
+          "available": true,
+          "source": "map/dsm.tif"
+        },
+        "pointcloud_ply": {
+          "available": true
+        }
+      }
+    },
+    {
+      "id": "2605_구좌세화저수조",
+      "site_id": "sehwa_reservoir",
+      "name": "구좌 세화 저수조",
+      "site_type": "저수조",
+      "site_category": "저수조",
+      "eup_myeon_dong": "구좌읍 세화리",
+      "flight_date": "2026-05",
+      "data_dir": "2605_구좌세화저수조",
+      "comparable_with": [],
+      "outputs": {
+        "tiles_2d": {
+          "available": true,
+          "kind": "image_overlay",
+          "source": "map/result.tif"
+        },
+        "tiles_3d": {
+          "available": true,
+          "tileset": "models/pc/0/terra_b3dms/tileset.json"
+        },
+        "dsm": {
+          "available": true,
+          "source": "map/dsm.tif"
+        },
+        "pointcloud_ply": {
+          "available": true
+        }
+      }
+    }
+  ]
+}

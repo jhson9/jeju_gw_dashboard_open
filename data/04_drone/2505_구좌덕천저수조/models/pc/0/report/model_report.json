@@ -1,0 +1,57 @@
+{
+    "contour generation": {
+        "generate contour": false
+    },
+    "dem generation": {
+        "generate dem": false
+    },
+    "density percent level": 2,
+    "generate b3dm": true,
+    "generate contour dxf": false,
+    "generate contour shp": false,
+    "generate dem tif": false,
+    "generate fbx": false,
+    "generate grid csv": false,
+    "generate grid dxf": false,
+    "generate grid geojson": false,
+    "generate grid shp": false,
+    "generate i3s": false,
+    "generate las": false,
+    "generate las 1.4": false,
+    "generate laz": false,
+    "generate laz 1.4": false,
+    "generate obj": false,
+    "generate osgb": false,
+    "generate pcd": false,
+    "generate ply": true,
+    "generate pnts": false,
+    "generate point ply": false,
+    "generate point s3mb": false,
+    "generate s3mb": false,
+    "generate tin dxf": false,
+    "generate tin landxml": false,
+    "generate tin shp": false,
+    "generate xml": true,
+    "grid and tin generation": {
+        "generate grid and tin": false
+    },
+    "ground extraction": {
+        "do ground extraction": false
+    },
+    "merge point": false,
+    "model simplify": 0.5,
+    "mvs block count": 1,
+    "mvs division grid length": 0.0,
+    "mvs division method": "Memory",
+    "mvs time": 1011266,
+    "process other time": 759928,
+    "quality level": 1,
+    "save model result time": 251338,
+    "scene mode": 0,
+    "sfm feature quantity level": 2,
+    "usable memory GB": 0.0,
+    "use cluster": false,
+    "water refine": false,
+    "water remove": false,
+    "weak texture optimization": false
+}
