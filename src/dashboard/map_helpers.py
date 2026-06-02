@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 import folium
+import streamlit as st
 from branca.element import MacroElement
 from jinja2 import Template
 
@@ -51,10 +52,19 @@ def _parse_dms(text: str) -> float | None:
 
 
 def _tm_to_wgs84(x: float, y: float) -> tuple[float | None, float | None]:
-    """EPSG:5186(중부원점 TM) → WGS84 (lat, lon). 실패 시 (None,None)."""
+    """EPSG:5186(중부원점 TM, false_easting=200000, false_northing=600000)
+    → WGS84 (lat, lon). 실패 시 (None,None).
+
+    ⚠️ 좌표계 변경 금지 — 실측 검증 완료 (2026-05-28):
+       master.csv 의 D199510018(제주시 오등동, x=156398.508 y=95756.1791) 가
+       EPSG:5186 변환 시 lat=33.454, lon=126.531 (실제 오등동 위치 일치),
+       EPSG:5187 로는 lon=128.5 (일본 영해) 로 오변환됨.
+       제주가 중부원점(127°E)에서 멀어 X 가 false_easting 200000 보다 작고
+       (200000 - 약 44km = 156000), Y 가 false_northing 600000 보다 한참 작은
+       (600000 - 약 504km = 96000) 것은 정상.
+    """
     try:
-        from pyproj import Transformer
-        # 한국 통합 TM(EPSG:5186, 중부원점)
+        from pyproj import Transformer  # noqa: F401  (import 확인용)
         tr = _get_tm_transformer()
         lon, lat = tr.transform(x, y)
         return float(lat), float(lon)
@@ -71,7 +81,7 @@ def _get_tm_transformer():
 # ==============================================================================
 #  ■ 3. 관측정 메타 로드 (위도·경도 정규화 포함)
 # ==============================================================================
-@lru_cache(maxsize=1)
+@st.cache_data(ttl=600, show_spinner=False)
 def load_station_meta() -> pd.DataFrame:
     """
     0_JD관측망_정보.xlsx 를 로드하고 'lat', 'lon' 컬럼(WGS84 십진수)을 추가.
@@ -158,7 +168,7 @@ _MAP_CSS = """
     padding: 2px 12px !important;
     box-sizing: border-box !important;
     background: rgba(255,255,255,0.85) !important;
-    color: #1a1a18 !important;
+    color: var(--color-text-primary) !important;
     font-weight: 600 !important;
 }
 .leaflet-control-scale {
@@ -170,7 +180,7 @@ _MAP_CSS = """
     background: rgba(255,255,255,0.85);
     border: 0.5px solid rgba(24,95,165,0.45);
     border-radius: 3px;
-    color: #185fa5;
+    color: var(--color-text-info);
     font-size: 10px;
     font-weight: 600;
     padding: 1px 4px;
@@ -178,9 +188,9 @@ _MAP_CSS = """
     white-space: nowrap;
 }
 .leaflet-tooltip.jeju-st-label-sel {
-    background: #e24b4a;
+    background: var(--color-danger);
     border: 1px solid #e24b4a;
-    color: #ffffff;
+    color: var(--color-bg-primary);
     font-size: 11px;
     font-weight: 700;
     padding: 2px 6px;
@@ -191,7 +201,7 @@ _MAP_CSS = """
 .leaflet-tooltip.jeju-aws-label {
     background: rgba(255,166,74,0.95);
     border: 0.8px solid #BA7517;
-    color: #ffffff;
+    color: var(--color-bg-primary);
     font-size: 12px;
     font-weight: 700;
     padding: 2px 6px;
@@ -199,9 +209,9 @@ _MAP_CSS = """
     box-shadow: 0 1px 2px rgba(0,0,0,0.18);
 }
 .leaflet-tooltip.jeju-aws-label-sel {
-    background: #e24b4a;
+    background: var(--color-danger);
     border: 1.5px solid #e24b4a;
-    color: #ffffff;
+    color: var(--color-bg-primary);
     font-size: 13px;
     font-weight: 800;
     padding: 3px 8px;
@@ -217,8 +227,8 @@ _MAP_CSS = """
 """
 
 
-def make_map(center: tuple[float, float] = (33.38, 126.55),
-             zoom: int = 10) -> folium.Map:
+def make_map(center: tuple[float, float] = (33.42, 126.55),
+             zoom: float = 11.5) -> folium.Map:
     """
     제주 중심의 Folium 지도 + 베이스맵 레이어.
 
@@ -226,6 +236,11 @@ def make_map(center: tuple[float, float] = (33.38, 126.55),
     - 마우스 휠/더블클릭 줌 비활성화, +/- 버튼만 (요청 1)
     - 드래그(panning)는 유지
     - 미터 전용 스케일 바, 3배 확대 (요청 5)
+
+    v1.2.10 (사용자 요청 2026-05-09):
+    - center (33.38→33.42) 북상 — 본섬만 보이고 마라도는 화면 밖
+    - zoom 11→11.5 + zoomSnap=0.5 (Leaflet fractional 줌 활성)
+      → 본섬을 약 1.2배 확대해 화면을 꽉 채움
     """
     m = folium.Map(
         location=list(center), zoom_start=zoom,
@@ -238,49 +253,48 @@ def make_map(center: tuple[float, float] = (33.38, 126.55),
         boxZoom=False,
         zoomControl=True,                # +/- 버튼은 유지
         dragging=True,                   # 드래그 패닝은 유지
+        # fractional zoom 활성 — zoom_start=11.5 같은 0.5 단위 적용 가능
+        zoomSnap=0.5,
     )
 
     # 커스텀 스케일 + 마커/스케일 CSS 일괄 주입
     m.get_root().header.add_child(folium.Element(_MAP_CSS))
     m.add_child(_MetricScale())
 
+    # ── 로컬 캐시 타일 (Step 2 사전 다운로드, 2026-05-14) ─────────────────
+    # src/dashboard/static/map_tiles/{Layer}/{z}/{x}/{y}.{ext} — 제주 bbox
+    # zoom 10~14 캐시. zoom 15+ 는 max_native_zoom 으로 14 의 타일을 확대 표시(블러).
+    # 사용자 합의 (2026-05-14): LayerControl 메뉴는 V-World 일반 + 위성 2개만.
+    #   - default = 일반 (사용자 평소 워크플로우)
+    #   - 캐시 갱신: "데이터 관리" 탭의 "🗺️ 지도 타일 캐시" 섹션에서 버튼으로 재다운로드
+    #   - CDN 폴백 / Esri / OSM / 하이브리드 / 흑백 layer 는 제거 (혼란만 가중)
+    #   - V-World API key 없으면 OSM 단일 폴백 (이 환경은 사실상 .env 에 키 있음)
+    local_attr = "ⓒ V-World (로컬 캐시)"
+    # default = V-World 일반.
+    # 두 base layer 모두 show=True 면 Leaflet LayerControl 이 "마지막 추가된 base"
+    # 를 활성화한다 (add_to 순서 무관). 일반을 default 로 강제하기 위해 위성에
+    # show=False 를 명시. 사용자가 LayerControl 에서 위성으로 토글 시 즉시 전환.
+    folium.TileLayer(
+        tiles="/app/static/map_tiles/Base/{z}/{x}/{y}.png",
+        attr=local_attr, name="V-World 일반", overlay=False, control=True,
+        min_zoom=8, max_zoom=19,
+        min_native_zoom=10, max_native_zoom=14,
+        show=True,
+    ).add_to(m)
+    folium.TileLayer(
+        tiles="/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg",
+        attr=local_attr, name="V-World 위성", overlay=False, control=True,
+        min_zoom=8, max_zoom=19,
+        min_native_zoom=10, max_native_zoom=14,
+        show=False,
+    ).add_to(m)
+
+    # V-World API key 미설정 환경의 최소 안전망 — 캐시 디렉토리가 비었거나
+    # 신규 배포 직후 사용자가 캐시 다운로드 전이라도 일단 지도가 뜨도록 OSM 추가.
+    # 정상 환경에서는 위 두 로컬 layer 만 노출되고 OSM 은 LayerControl 에서 보이지만
+    # default 가 V-World 일반이라 사용자가 의식적으로 전환하지 않으면 활성화 안 됨.
     key = (config.VWORLD_API_KEY or "").strip()
-    if key:
-        # V-World WMTS 타일 (사용자 키).
-        # v1.2.08: 첫 화면 = 위성 + 하이브리드(라벨) 오버레이 → 3D 같은 입체감.
-        base_url = f"https://api.vworld.kr/req/wmts/1.0.0/{key}"
-        attr = "ⓒ V-World"
-        # 1) 위성 — 기본 base (제일 먼저 추가되는 base 가 default)
-        folium.TileLayer(
-            tiles=f"{base_url}/Satellite/{{z}}/{{y}}/{{x}}.jpeg",
-            attr=attr, name="V-World 위성", overlay=False, control=True,
-            max_zoom=19,
-        ).add_to(m)
-        # 2) 하이브리드 (도로·지명 라벨) — 위성 위에 기본 ON 으로 얹어 입체감 강화
-        folium.TileLayer(
-            tiles=f"{base_url}/Hybrid/{{z}}/{{y}}/{{x}}.png",
-            attr=attr, name="V-World 하이브리드", overlay=True, control=True,
-            max_zoom=19, show=True,
-        ).add_to(m)
-        # 3) 대체 base 들
-        folium.TileLayer(
-            tiles=f"{base_url}/Base/{{z}}/{{y}}/{{x}}.png",
-            attr=attr, name="V-World 일반", overlay=False, control=True,
-            max_zoom=19,
-        ).add_to(m)
-        folium.TileLayer(
-            tiles=f"{base_url}/gray/{{z}}/{{y}}/{{x}}.png",
-            attr=attr, name="V-World 흑백", overlay=False, control=True,
-            max_zoom=19,
-        ).add_to(m)
-    else:
-        # 폴백: ESRI 위성 + OSM (위성을 default 로)
-        folium.TileLayer(
-            tiles=("https://server.arcgisonline.com/ArcGIS/rest/services/"
-                   "World_Imagery/MapServer/tile/{z}/{y}/{x}"),
-            attr="ⓒ Esri", name="위성 (Esri)",
-            overlay=False, control=True, max_zoom=19,
-        ).add_to(m)
+    if not key:
         folium.TileLayer(
             "OpenStreetMap", name="일반지도 (OSM)",
             overlay=False, control=True
@@ -319,6 +333,14 @@ def add_station_markers(m: folium.Map, station_df: pd.DataFrame,
                 offset=(10, 0), sticky=False,
                 class_name="jeju-st-label-sel",
             )
+            # 선택 halo — pointer-events:none (sel-halo) 으로 클릭 안전.
+            folium.CircleMarker(
+                location=[r["lat"], r["lon"]],
+                radius=20,
+                color="transparent", weight=0,
+                fill=True, fill_color="#e24b4a", fill_opacity=0.18,
+                class_name="sel-halo",
+            ).add_to(m)
             folium.CircleMarker(
                 location=[r["lat"], r["lon"]],
                 # 호소 #4 — hit-area 개선: 선택 10→12.

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -21,47 +22,6 @@ import streamlit as st
 
 import config
 from src.dashboard.map_helpers import _tm_to_wgs84
-
-# ------------------------------------------------------------------------------
-#  Safe-fallback 경로 변수
-#  ----------------------------------------------------------------------------
-#  Streamlit Cloud 배포 환경에서 config 모듈의 일부 AG_* 속성이 누락된 채
-#  로드되는 사례가 있어, 모듈 임포트 시점에 값을 안전하게 고정한다.
-#  config 에 정상 정의되어 있으면 그 값을, 그렇지 않으면 PROJECT_ROOT 기준
-#  표준 경로를 사용한다.
-# ------------------------------------------------------------------------------
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_AG_WELL_DIR = getattr(config, "AG_WELL_DIR", _PROJECT_ROOT / "data_ag_well")
-_AG_MASTER_FILE = getattr(config, "AG_MASTER_FILE", _AG_WELL_DIR / "master.csv")
-_AG_MASTER_YEARLY_DIR = getattr(config, "AG_MASTER_YEARLY_DIR", _AG_WELL_DIR / "master_yearly")
-_AG_USAGE_DIR = getattr(config, "AG_USAGE_DIR", _AG_WELL_DIR / "usage")
-_AG_QUALITY_DIR = getattr(config, "AG_QUALITY_DIR", _AG_WELL_DIR / "water_quality")
-_AG_QUALITY_SEMIANNUAL = getattr(
-    config,
-    "AG_QUALITY_SEMIANNUAL",
-    _AG_QUALITY_DIR / "water_quality_semiannual.csv",
-)
-_AG_QUALITY_REGULAR = getattr(
-    config,
-    "AG_QUALITY_REGULAR",
-    _AG_QUALITY_DIR / "water_quality_regular.csv",
-)
-
-# 수질 기준치도 동일 패턴으로 안전 폴백 (Streamlit Cloud stale-import 대비)
-_WATER_QUALITY_STANDARDS_FALLBACK = {
-    "ammonia_n": {"kor": "암모니아성 질소", "unit": "mg/L",  "max": 0.5},
-    "nitrate_n": {"kor": "질산성질소",      "unit": "mg/L",  "max": 20.0},
-    "pH":        {"kor": "수소이온농도",    "unit": "-",     "min": 6.0, "max": 8.5},
-    "chloride":  {"kor": "염소이온",        "unit": "mg/L",  "max": 250.0},
-    "EC":        {"kor": "전기전도도",      "unit": "μS/cm"},
-}
-_WATER_QUALITY_REGULAR_STANDARDS_FALLBACK = {}
-_WATER_QUALITY_STANDARDS = getattr(config, "WATER_QUALITY_STANDARDS", _WATER_QUALITY_STANDARDS_FALLBACK)
-_WATER_QUALITY_REGULAR_STANDARDS = getattr(
-    config,
-    "WATER_QUALITY_REGULAR_STANDARDS",
-    _WATER_QUALITY_REGULAR_STANDARDS_FALLBACK,
-)
 
 
 # ------------------------------------------------------------------------------
@@ -75,9 +35,18 @@ def _clean_num(v) -> float | None:
         if pd.isna(v):
             return None
         return float(v)
-    s = str(v).strip().replace(",", "")
+    # 콤마 제거 후 공백 처리 (V7 수정 2026-05-27).
+    #  기존엔 모든 공백을 무조건 제거 → "1 2"(별개 토큰 2개)가 "12" 로 위조될
+    #  위험이 있었음. 이제 공백은 '천단위 구분' 패턴일 때만(뒤 그룹이 정확히
+    #  3자리) 제거하고, 그 외 숫자 사이 공백이 있으면 파싱 불가로 간주(None).
+    s = re.sub(r"\s+", " ", str(v).strip()).replace(",", "")
     if s == "" or s.lower() in ("nan", "none"):
         return None
+    if " " in s:
+        if re.fullmatch(r"[+-]?\d{1,3}(?: \d{3})+(?:\.\d+)?", s):
+            s = s.replace(" ", "")
+        else:
+            return None
     try:
         return float(s)
     except ValueError:
@@ -127,7 +96,14 @@ def _normalize_master(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(_clean_num)
 
-    # active 정규화 (true/false 문자열 → bool)
+    # active 정규화 (true/false 문자열 → bool).
+    # master.csv 는 'active', master_yearly/master_YYYY.csv 는 'is_active' 컬럼명.
+    # 두 형태 모두 받아 'active' 컬럼으로 통일 (2026-05-28 검증2팀 지적).
+    if "is_active" in df.columns and "active" not in df.columns:
+        df = df.rename(columns={"is_active": "active"})
+    elif "is_active" in df.columns and "active" in df.columns:
+        # 양쪽 모두 있는 비정상 케이스 — active 우선, is_active 폐기.
+        df = df.drop(columns=["is_active"])
     if "active" in df.columns:
         df["active"] = (
             df["active"].astype(str).str.strip().str.lower()
@@ -150,7 +126,12 @@ def _normalize_master(df: pd.DataFrame) -> pd.DataFrame:
         df["lat"] = [ll[0] for ll in latlons]
         df["lon"] = [ll[1] for ll in latlons]
 
-    # 관할 (authority): well_si 기반
+    # 관할 (authority): well_si 기반 영문 코드 (jeju/seogwipo) — 다수 코드가
+    # 이 값에 의존 (tab21_ag_stats:304, _tab12_group_stats:99, ag_map_builders:126 등).
+    # master.csv 의 원본 한글 authority (제주시/서귀포시/농어촌공사/제주특별자치도)
+    # 는 tab6 결과 표 '관리주체' 컬럼 표시용으로 authority_kor 에 별도 보존.
+    if "authority" in df.columns:
+        df["authority_kor"] = df["authority"]
     if "well_si" in df.columns:
         df["authority"] = df["well_si"].apply(
             lambda s: "seogwipo" if isinstance(s, str) and "서귀포" in s
@@ -176,6 +157,13 @@ def _normalize_master(df: pd.DataFrame) -> pd.DataFrame:
         addr_parts.append(" ".join(p for p in parts if p))
     df["address_full"] = addr_parts
 
+    # ID 컬럼 정규화 — CSV 에 숫자 한 행이라도 섞이면 dtype 이 object/int 로
+    # 갈라져 `==` 비교가 silent False 가 되는 케이스 차단. 호출처 6곳이 무방비
+    # 비교를 하던 문제 해결.
+    for _id_col in ("permit_no", "well_id"):
+        if _id_col in df.columns:
+            df[_id_col] = df[_id_col].astype("string").str.strip()
+
     # 검색 인덱스
     df["search_text"] = (
         df.get("permit_no", pd.Series(dtype=str)).fillna("").astype(str).str.lower()
@@ -191,7 +179,7 @@ def _normalize_master(df: pd.DataFrame) -> pd.DataFrame:
 # ------------------------------------------------------------------------------
 #  ■ master.csv
 # ------------------------------------------------------------------------------
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_master(active_only: bool = True) -> pd.DataFrame:
     """data_ag_well/master.csv 를 로드.
 
@@ -201,7 +189,7 @@ def load_master(active_only: bool = True) -> pd.DataFrame:
         True 면 active=True (운영중) 관정만 반환. 지도 표시·검색 기본값.
         False 면 전체 (사라진 관정 포함). 통계 탭에서 사용.
     """
-    p = _AG_MASTER_FILE
+    p = config.AG_MASTER_FILE
     if not p.exists():
         return pd.DataFrame()
 
@@ -213,10 +201,10 @@ def load_master(active_only: bool = True) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_master_yearly(year: int) -> pd.DataFrame:
     """master_yearly/master_YYYY.csv 를 로드. 없으면 빈 DataFrame."""
-    p = _AG_MASTER_YEARLY_DIR / f"master_{year}.csv"
+    p = config.AG_MASTER_YEARLY_DIR / f"master_{year}.csv"
     if not p.exists():
         return pd.DataFrame()
     df = pd.read_csv(p, encoding="utf-8-sig")
@@ -225,7 +213,7 @@ def load_master_yearly(year: int) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_master_yearly_all() -> pd.DataFrame:
     """master_yearly/ 의 모든 연도를 concat 해 반환 (변동 추적용).
 
@@ -236,9 +224,9 @@ def load_master_yearly_all() -> pd.DataFrame:
     채워지므로 결과 DataFrame 에는 영향 없음.
     """
     frames = []
-    if not _AG_MASTER_YEARLY_DIR.exists():
+    if not config.AG_MASTER_YEARLY_DIR.exists():
         return pd.DataFrame()
-    for p in sorted(_AG_MASTER_YEARLY_DIR.glob("master_*.csv")):
+    for p in sorted(config.AG_MASTER_YEARLY_DIR.glob("master_*.csv")):
         try:
             year = int(p.stem.split("_")[-1])
         except ValueError:
@@ -260,7 +248,7 @@ _MONTH_MAP = {
 }
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_usage_long() -> pd.DataFrame:
     """usage/usage_montly_*.csv 9년치 → long format 통합.
 
@@ -269,13 +257,13 @@ def load_usage_long() -> pd.DataFrame:
     DataFrame columns: permit_no, well_id, year, month, volume_m3,
                        capacity_m3d, permit_m3m, usage_rate, date
     """
-    if not _AG_USAGE_DIR.exists():
+    if not config.AG_USAGE_DIR.exists():
         return pd.DataFrame()
 
     frames = []
-    yr_lo, yr_hi = getattr(config, "AG_USAGE_YEAR_RANGE", (2017, 2025))
+    yr_lo, yr_hi = config.AG_USAGE_YEAR_RANGE
     for yr in range(yr_lo, yr_hi + 1):
-        p = _AG_USAGE_DIR / f"usage_montly_{yr}.csv"
+        p = config.AG_USAGE_DIR / f"usage_montly_{yr}.csv"
         if not p.exists():
             continue
         d = pd.read_csv(p, encoding="utf-8-sig")
@@ -306,6 +294,11 @@ def load_usage_long() -> pd.DataFrame:
 
     df = pd.concat(frames, ignore_index=True)
 
+    # ID 컬럼 정규화 — master 와 동일 정책 (string dtype + strip)
+    for _id_col in ("permit_no", "well_id"):
+        if _id_col in df.columns:
+            df[_id_col] = df[_id_col].astype("string").str.strip()
+
     # 사용률 (%) — permit_m3m 대비
     df["usage_rate"] = pd.NA
     mask = df["permit_m3m"].notna() & (df["permit_m3m"] > 0) & df["volume_m3"].notna()
@@ -319,6 +312,15 @@ def load_usage_long() -> pd.DataFrame:
         errors="coerce",
     )
     df = df.sort_values(["permit_no", "year", "month"]).reset_index(drop=True)
+
+    # 이상값 마킹 — drop 하지 않음. tab7 화면에서 사용자에게 표시.
+    # current_year 를 명시 전달해야 cache_data ttl 동안 결과가 안정적.
+    from datetime import date as _date_cls
+    from src.analysis import anomaly_detection
+    df = anomaly_detection.detect_usage_anomalies(
+        df, current_year=_date_cls.today().year,
+    )
+
     return df
 
 
@@ -328,10 +330,10 @@ def load_usage_long() -> pd.DataFrame:
 _QUALITY_NUMERIC_COLS = ("ammonia_n", "nitrate_n", "pH", "chloride", "EC")
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_quality_semiannual() -> pd.DataFrame:
     """반기 수질 5항목 long format. 부적합 플래그(*_exceed) 자동 추가."""
-    p = _AG_QUALITY_SEMIANNUAL
+    p = config.AG_QUALITY_SEMIANNUAL
     if not p.exists():
         return pd.DataFrame()
 
@@ -340,6 +342,11 @@ def load_quality_semiannual() -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(_parse_quality)
 
+    # ID 컬럼 정규화 — master/usage 와 동일 정책
+    for _id_col in ("permit_no", "well_id"):
+        if _id_col in df.columns:
+            df[_id_col] = df[_id_col].astype("string").str.strip()
+
     if "year" in df.columns:
         df["year"] = pd.to_numeric(df["year"], errors="coerce").astype("Int64")
     if "sampling_date" in df.columns:
@@ -347,27 +354,32 @@ def load_quality_semiannual() -> pd.DataFrame:
     if "half" in df.columns:
         df["half"] = df["half"].astype(str).str.strip()
 
-    df = _add_exceed_flags(df, _WATER_QUALITY_STANDARDS)
+    df = _add_exceed_flags(df, config.WATER_QUALITY_STANDARDS)
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
 def load_quality_regular() -> pd.DataFrame:
     """정기검사 15항목."""
-    p = _AG_QUALITY_REGULAR
+    p = config.AG_QUALITY_REGULAR
     if not p.exists():
         return pd.DataFrame()
 
     df = pd.read_csv(p, encoding="utf-8-sig")
-    for col in _WATER_QUALITY_REGULAR_STANDARDS:
+    for col in config.WATER_QUALITY_REGULAR_STANDARDS:
         if col in df.columns:
             df[col] = df[col].apply(_parse_quality)
+
+    # ID 컬럼 정규화
+    for _id_col in ("permit_no", "well_id"):
+        if _id_col in df.columns:
+            df[_id_col] = df[_id_col].astype("string").str.strip()
 
     if "sampling_date" in df.columns:
         df["sampling_date"] = pd.to_datetime(df["sampling_date"], errors="coerce")
         df["year"] = df["sampling_date"].dt.year.astype("Int64")
 
-    df = _add_exceed_flags(df, _WATER_QUALITY_REGULAR_STANDARDS)
+    df = _add_exceed_flags(df, config.WATER_QUALITY_REGULAR_STANDARDS)
     return df.reset_index(drop=True)
 
 

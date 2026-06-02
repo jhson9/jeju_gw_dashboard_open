@@ -8,16 +8,22 @@
 #      >=X.Y.Z  : X.Y.Z 이상 버전 허용 (권장)
 #      ==X.Y.Z  : 정확히 이 버전만 (호환성 문제 시 사용)
 # ==============================================================================
-# venv-rebuild-token: 2026-05-05-stale-pyc-fix
-# (위 토큰은 Streamlit Cloud 가 venv 와 __pycache__ 를 새로 빌드하도록 유도하기
-#  위한 의도적 변경. 패키지 동작에는 영향 없음.)
 
 # --- 웹 대시보드 프레임워크 ---
-streamlit>=1.32.0
+# 1.47.x 환경 검증 완료. 상한 <1.57 — 호환성 분석(2026-05-12) 결과 1.49~1.55
+# 까지의 변경이 우리 try/except 폴백 4곳을 깨지 않는 것으로 확인:
+#   - st.tabs(key=...) 정식 지원은 1.56+ (PR #14332). 1.55 까지 우리 TypeError 폴백 그대로.
+#   - st.rerun(scope="fragment") 는 1.37+ 부터 정식 — 변경 없음.
+#   - @st.fragment 도 1.37+ 부터 정식 — 변경 없음.
+#   - st.experimental_fragment 는 1.49 에서 제거되었으나 우리 코드 미사용.
+# 위험 영역: 1.50 의 widget "key as identity" 변경 — 새 환경에서 streamlit 실행
+# 시 widget 동작 검증 필요. 1.56+ 는 별도 세션에서 검증 후 결정 권장.
+streamlit>=1.47.1,<1.57
 
 # --- 데이터 처리 ---
 pandas>=2.0.0
 numpy>=1.24.0
+pyarrow>=15.0.0      # parquet 통합 캐시 (data/GWlevel/gwlevel_day.parquet) — 첫 로드 ~5배 단축
 
 # --- 인터랙티브 차트 (기존 Chart.js를 대체) ---
 plotly>=5.18.0
@@ -35,8 +41,19 @@ python-dotenv>=1.0.0
 # --- 진행률 표시 (터미널에서 다운로드 진행바) ---
 tqdm>=4.66.0
 
+# --- 시설재배 빌드 전용 (scripts/build_greenhouse_stats.py) — Build 2026-05-30 ---
+# 환경공간정보서비스(EGIS) WFS GeoJSON 폴리곤 → 면적·읍면동 분해 → CSV
+# 대시보드 런타임에는 불필요. pip install 시 GDAL 등 시스템 의존성 자동 해결됨.
+geopandas>=0.14.0
+pyogrio>=0.7.0
+
 # --- 지도 (V-World / OSM) ---  Build 1.2.01
 folium>=0.20.0
 streamlit-folium>=0.27.0
 lxml>=4.9.0          # 지하수위 일자료 HTML(.xls) 파싱용
 pyproj>=3.6.0        # TM좌표 → WGS84 변환
+
+# --- V6 dual-zone 그림 (tab10) ---  Build 2.0
+matplotlib>=3.8.0    # st.pyplot 으로 V6 figure 임베드
+squarify>=0.4.4      # treemap packing (그림 24·26·27)
+koreanize-matplotlib>=0.1.1  # matplotlib 한글 폰트 자동 적용

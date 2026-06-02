@@ -35,6 +35,102 @@ AUTHORITY_KOR: dict[str, str] = {
 
 
 # ------------------------------------------------------------------------------
+#  ■ 활성 사용 관정 집합 (사용자 요청 2026-05-19)
+# ------------------------------------------------------------------------------
+def active_user_permits(
+    usage_period: pd.DataFrame,
+    min_annual_m3: "float | None" = None,
+) -> set[str]:
+    """분석 기간 내 모집단(연간 이용량 ≥ ``min_annual_m3``) permit_no 집합.
+
+    2026-05-28 (P2-1) 변경: 기본 임계가 ``POPULATION_MIN_ANNUAL_M3`` (=100㎥) 로
+    승격. 이전엔 `sum > 0` 만 검사하여 휴면 관정도 포함했으나, Tab23 의 모집단
+    정의(100㎥)와 일치시켜 KPI/지도/12장의 분모를 통일.
+
+    하위 호환: ``min_annual_m3=0`` 을 명시 전달하면 과거 정의(any usage) 로 복귀.
+
+    Parameters
+    ----------
+    usage_period : pd.DataFrame
+        분석 기간(year_tuple)으로 이미 필터된 usage long-format.
+        permit_no, volume_m3 컬럼 필수.
+    min_annual_m3 : float, optional
+        연간 이용량 임계(㎥). None 이면 ``POPULATION_MIN_ANNUAL_M3`` 사용.
+
+    Returns
+    -------
+    set[str]
+        permit_no 의 집합 (string). 빈 DataFrame 이면 빈 set.
+    """
+    if usage_period is None or usage_period.empty:
+        return set()
+    if "volume_m3" not in usage_period.columns \
+            or "permit_no" not in usage_period.columns:
+        return set()
+    threshold = float(min_annual_m3) if min_annual_m3 is not None else POPULATION_MIN_ANNUAL_M3
+    if threshold <= 0:
+        # 과거 정의: sum > 0 인 관정 (휴면 관정 포함)
+        by = usage_period.groupby("permit_no")["volume_m3"].sum(min_count=1)
+        return {str(p) for p in by[by > 0].index}
+    # 신정의(2026-05-28): 연 ≥ threshold ㎥. population_permits_by_year 와 일치.
+    return population_permits_by_year(usage_period, min_annual_m3=threshold)
+
+
+# ------------------------------------------------------------------------------
+#  ■ 모집단 규칙: 연간 이용량 임계 (사용자 요청 2026-05-27)
+# ------------------------------------------------------------------------------
+#  정책: "관정 모집단은 이용량 유무로 잡는다. 어떤 해의 연간 총이용량이
+#         100㎥(=100톤) 미만이면 그 해의 대상 관정에서 제외하고, 100㎥ 이상이면
+#         그 해에 '살아있는' 관정으로 본다."
+#  → (permit_no, year) 단위로 판정. 분자(이용량 합계)와 분모(관정 수)가 항상
+#    같은 집합을 쓰도록, 집계 이전에 long-format 에서 미달 (관정,연도) 행을 제거.
+POPULATION_MIN_ANNUAL_M3: float = 100.0
+
+
+def filter_population_by_annual_usage(
+    df_usage: pd.DataFrame,
+    min_annual_m3: float = POPULATION_MIN_ANNUAL_M3,
+) -> pd.DataFrame:
+    """(permit_no, year) 별 연간 이용량이 ``min_annual_m3`` 미만인 행을 제거.
+
+    이용량 분석의 '대상 관정 모집단' 을 정의하는 단일 진입점. 이 필터를 거친
+    DataFrame 으로 합계·평균·관정수를 모두 계산하면 분자·분모가 자동으로 같은
+    (관정,연도) 집합을 공유한다.
+
+    - 100톤 ≈ 100㎥ (물 1톤 = 1㎥). 기준 미만 = 사실상 미사용/휴면 → 제외.
+    - year 컬럼이 없으면 permit_no 전체 합계로 판정(연도 구분 없음).
+
+    원본은 수정하지 않고 사본을 반환.
+    """
+    if df_usage is None or df_usage.empty:
+        return df_usage
+    if "volume_m3" not in df_usage.columns or "permit_no" not in df_usage.columns:
+        return df_usage
+
+    keys = ["permit_no", "year"] if "year" in df_usage.columns else ["permit_no"]
+    annual = df_usage.groupby(keys)["volume_m3"].transform(
+        lambda s: s.sum(min_count=1)
+    )
+    keep = annual >= float(min_annual_m3)
+    return df_usage[keep.fillna(False)].copy()
+
+
+def population_permits_by_year(
+    df_usage: pd.DataFrame,
+    min_annual_m3: float = POPULATION_MIN_ANNUAL_M3,
+) -> set[str]:
+    """모집단 규칙(연 ``min_annual_m3`` 이상)을 만족하는 permit_no 집합.
+
+    어느 한 해라도 기준을 넘은 관정이면 포함(분석기간 내 '살아있던' 관정).
+    aggregate_units 등에 넘길 ``active_permits`` 로 사용.
+    """
+    filtered = filter_population_by_annual_usage(df_usage, min_annual_m3)
+    if filtered is None or filtered.empty or "permit_no" not in filtered.columns:
+        return set()
+    return {str(p) for p in filtered["permit_no"].unique()}
+
+
+# ------------------------------------------------------------------------------
 #  ■ 사용률 계산
 # ------------------------------------------------------------------------------
 def compute_usage_rate(df: pd.DataFrame) -> pd.DataFrame:
@@ -189,7 +285,14 @@ def kpi_total_volume(df_usage: pd.DataFrame, year: int | None = None) -> float:
 
 
 def kpi_avg_usage_rate(df_usage: pd.DataFrame, year: int | None = None) -> float | None:
-    """평균 사용률(%) — 결측은 제외."""
+    """관정 평균 사용률(%) — 관정×월 단위 usage_rate 의 비가중 평균.
+
+    주의 (L3, 2026-05-27): 이것은 '비율의 평균(average-of-ratios)' 으로,
+    각 관정×월을 동등 가중한다. 따라서 소형 관정·소분모 이상치에 민감하며
+    "지역 전체가 허가량 대비 얼마나 쓰는가" 라는 시스템 수준 지표로는
+    오해를 줄 수 있다. 시스템 수준 지표는 `kpi_system_usage_rate`
+    (Σ양수량 / Σ허가량) 를 사용할 것. 본 함수는 '관정당 평균' 의미일 때만 사용.
+    """
     if df_usage.empty or "usage_rate" not in df_usage.columns:
         return None
     if year is None and "year" in df_usage.columns:
@@ -199,6 +302,35 @@ def kpi_avg_usage_rate(df_usage: pd.DataFrame, year: int | None = None) -> float
     if rates.notna().sum() == 0:
         return None
     return float(rates.mean(skipna=True))
+
+
+def kpi_system_usage_rate(df_usage: pd.DataFrame, year: int | None = None) -> float | None:
+    """시스템 사용률(%) = Σ양수량 / Σ허가량 × 100 (양수가중).
+
+    L3(2026-05-27) 추가. `kpi_avg_usage_rate` 의 '비율의 평균' 과 달리,
+    총량 기준으로 산출해 대형 관정의 비중을 올바르게 반영한다. 지역/전체
+    수준의 '허가량 대비 실사용' 헤드라인 지표는 이 함수를 쓰는 것이 옳다.
+
+    유효한(허가량 > 0, 양수량 결측 아님) 행만 분자·분모에 포함한다.
+    분모가 0 이거나 유효 행이 없으면 None.
+    """
+    if df_usage.empty \
+            or "volume_m3" not in df_usage.columns \
+            or "permit_m3m" not in df_usage.columns:
+        return None
+    if year is None and "year" in df_usage.columns:
+        year = int(df_usage["year"].max())
+    sub = df_usage[df_usage["year"] == year] if year is not None else df_usage
+
+    vol = pd.to_numeric(sub["volume_m3"], errors="coerce")
+    permit = pd.to_numeric(sub["permit_m3m"], errors="coerce")
+    valid = vol.notna() & permit.notna() & (permit > 0)
+    if not valid.any():
+        return None
+    denom = float(permit[valid].sum())
+    if denom <= 0:
+        return None
+    return float(vol[valid].sum() / denom * 100.0)
 
 
 def kpi_overuse_count(df_usage: pd.DataFrame, year: int | None = None) -> int:

@@ -46,6 +46,25 @@ import config
 MISSING_TOKENS = ["-", "", "NaN", "nan", None]
 
 
+# load_all_station_data() 실행 시 다중 컬럼 동시 이상으로 drop 된 행 요약.
+# tab3 가 caption 표기에 참조.
+#
+# 캐시 일관성 메모 (검증팀 B, 2026-05):
+#   tab3 의 `_load_station_data_cached(ttl=300)` 가 load_all_station_data() 를
+#   감싸기 때문에, cache hit 시에는 이 모듈 전역이 갱신되지 않음. 하지만
+#   cache hit = 입력 CSV 동일 = drop 결과 동일 이므로 stale 값이 곧 정답.
+#   load_all_station_data() 가 cache miss 또는 watershed_mapper 등 다른
+#   비-캐시 호출자에서 실행될 때 갱신되어 자연스럽게 일관성 유지.
+_LAST_GWLEVEL_DROPPED: list[dict] = []
+
+
+def get_last_dropped_summary() -> list[dict]:
+    """load_all_station_data() 가 마지막으로 drop 한 행 요약을 반환.
+    각 dict: {station, yymmdd, reason}.
+    """
+    return list(_LAST_GWLEVEL_DROPPED)
+
+
 # ==============================================================================
 #  ■ 1. 단일 파일 파싱
 # ==============================================================================
@@ -273,6 +292,19 @@ def load_all_station_data() -> pd.DataFrame:
     combined = pd.concat(all_dfs, ignore_index=True)
     if "날짜" in combined.columns:
         combined["날짜"] = pd.to_datetime(combined["날짜"], errors="coerce")
+
+    # 다중 컬럼 동시 이상 = 기기 오동작 → drop. EL 단독 이상은 자연 변동 가능
+    # 으로 간주, 임계 카운트 제외 (사용자 정책).
+    from src.analysis import anomaly_detection
+    combined = anomaly_detection.detect_gwlevel_anomalies(combined)
+    combined, dropped = anomaly_detection.drop_gwlevel_anomalies(combined)
+
+    # tab3 caption 에서 표기하도록 요약을 모듈 전역에 보관 (session_state 는
+    # streamlit context 가 아니면 접근 불가하므로 모듈 변수 사용. 캐시된
+    # combined 와 함께 일관 — load_all_station_data 가 다시 실행되면 갱신).
+    global _LAST_GWLEVEL_DROPPED
+    _LAST_GWLEVEL_DROPPED = dropped
+
     return combined
 
 

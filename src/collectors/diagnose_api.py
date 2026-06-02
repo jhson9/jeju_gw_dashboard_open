@@ -342,7 +342,11 @@ def final_diagnosis(https_result: dict, http_result: dict,
             print("     2) 회사/학교 네트워크라면 개인 네트워크(집/핫스팟)에서 재시도")
             print("     3) IP 차단 가능성: 공공데이터포털 고객센터 문의")
             print("     4) 브라우저에서 직접 URL 테스트 (아래 URL 복사하여 브라우저 주소창에):")
-            print(f"        {https_result['url']}?serviceKey={config.KMA_API_KEY[:15]}..."
+            # P4-5 (2026-05-29): API 키 앞 15자 → 5자로 축소.
+            # 로그/스크린샷 공유 시 부분 키 유출 영향 최소화. 브라우저 테스트는
+            # 사용자가 .env 의 KMA_API_KEY 를 직접 복사해 채우도록 안내.
+            _key_prefix = (config.KMA_API_KEY or "")[:5]
+            print(f"        {https_result['url']}?serviceKey={_key_prefix}***[전체키는 .env 참조]***"
                   f"&pageNo=1&numOfRows=5&dataType=JSON&dataCd=ASOS&dateCd=DAY"
                   f"&startDt=20240101&endDt=20240105&stnIds=184")
             return
