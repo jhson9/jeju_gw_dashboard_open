@@ -571,9 +571,17 @@ def _build_ws_bar(ws_df, periods, ws_col):
         bl = list(range(p["year"] - n_gw, p["year"]))
         ra = ws_df[ws_df["연월"] == ym]
         act_v.append(float(ra["EL_평균"].iloc[0]) if not ra.empty else None)
-        bv = [float(ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]["EL_평균"].iloc[0])
-              for y in bl
-              if not ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"].empty]
+        # V8 통일 (2026-05-27): baseline 연도 중 NaN(예: 10일↑ 결측으로
+        # 월평균이 무효화된 해) 은 건너뛰고 남은 유효 연도만으로 평균 — 다른
+        # 자료로 자료를 구성. _build_overall_diff_chart 와 동일 동작.
+        bv = []
+        for y in bl:
+            rb = ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]
+            if rb.empty:
+                continue
+            v = float(rb["EL_평균"].iloc[0])
+            if pd.notna(v):
+                bv.append(v)
         avg_v.append(sum(bv)/len(bv) if bv else None)
     all_v = [v for v in act_v + avg_v if v is not None]
     y_min = min(all_v) * 0.96 if all_v else 0
@@ -647,9 +655,17 @@ def _build_ws_detail_table(ws_df, periods):
         bl = list(range(p["year"] - n_gw, p["year"]))
         ra = ws_df[ws_df["연월"] == ym]
         actual = float(ra["EL_평균"].iloc[0]) if not ra.empty else None
-        bv = [float(ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]["EL_평균"].iloc[0])
-              for y in bl
-              if not ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"].empty]
+        # V8 통일 (2026-05-27): NaN baseline 연도는 건너뛰기 — 다른 유효 연도로
+        # 자료 구성. 10일↑ 결측 등으로 NaN 처리된 월이 한 해 끼어도 그 기간
+        # 평균이 통째로 무효화되지 않음.
+        bv = []
+        for y in bl:
+            rb = ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]
+            if rb.empty:
+                continue
+            v = float(rb["EL_평균"].iloc[0])
+            if pd.notna(v):
+                bv.append(v)
         avg = sum(bv)/len(bv) if bv else None
         rows.append((pk, p, actual, avg))
     head = (
@@ -699,9 +715,16 @@ def _build_stations_chart_table(sel, periods, station_df, ws_to_stations):
             bl = list(range(p["year"] - n_gw, p["year"]))
             ra = df_s[df_s["연월"] == ym]
             actual = float(ra["EL"].iloc[0]) if not ra.empty else None
-            bv = [float(df_s[df_s["연월"] == f"{y}-{p['month']:02d}"]["EL"].iloc[0])
-                  for y in bl
-                  if not df_s[df_s["연월"] == f"{y}-{p['month']:02d}"].empty]
+            # V8 통일 (2026-05-27): NaN baseline 연도 건너뛰기 — 관측소 단위에도
+            # 동일 적용.
+            bv = []
+            for y in bl:
+                rb = df_s[df_s["연월"] == f"{y}-{p['month']:02d}"]
+                if rb.empty:
+                    continue
+                v = float(rb["EL"].iloc[0])
+                if pd.notna(v):
+                    bv.append(v)
             avg = sum(bv)/len(bv) if bv else None
             per[pk] = {"actual": actual, "avg": avg}
         stn_data[stn] = per
@@ -827,11 +850,16 @@ def build_report_html(base_date, periods,
     """
     generated_at = datetime.now()
 
-    # 관측정 데이터 (선택적)
+    # 관측정 데이터 (선택적). 실패 시 빈 폴백 — 사용자 보이게 로그 남김
+    # (오류팀4 권고 2026-05-08: silent fail 차단).
     try:
         station_df = gwlevel_parser.load_all_station_data()
         ws_to_stations = watershed_mapper.get_watershed_to_stations_map()
     except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).exception(
+            "관측정 데이터 로드 실패 — 보고서에 빈 DataFrame 으로 폴백",
+        )
         station_df = pd.DataFrame()
         ws_to_stations = {}
 

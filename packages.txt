@@ -1,0 +1,32 @@
+# ==============================================================================
+#  Streamlit Cloud apt-get system packages — packages.txt (제안본 v2)
+#  jeju_gw_dashboard_open repo 루트에 배치 → Streamlit Cloud 가 자동 apt install
+# ------------------------------------------------------------------------------
+#  작성:  2026-06-01 — 드론 탭 5개(31~35) 도입 대비
+#  개정:  2026-06-01 v2 — 검증 #2 (공개배포팀) 권고 반영
+#         "gdal-bin/libgdal-dev 가 2025-09 이후 libodbc2 충돌 보고됨"
+#         → apt 의존성 5종 모두 제거하고 rasterio wheel(GDAL 동봉)에만 의존
+#         → 빌드 실패 시에만 단계적 추가
+# ==============================================================================
+
+# 본 파일은 의도적으로 비워두는 것이 1차 권장.
+# rasterio / pyproj / shapely 의 PyPI wheel 이 모든 시스템 의존성을 동봉.
+#
+# 빌드/런타임 오류 발생 시에만 아래 한 줄씩 풀어가며 재시도:
+#
+#   libproj-dev
+#   proj-data
+#   proj-bin
+#   libgeos-dev
+#
+# 절대 함께 사용 금지 (libodbc2 충돌 보고):
+#   gdal-bin       ← 사용 금지
+#   libgdal-dev    ← 사용 금지
+#
+# --- Git LFS 자동 설치가 안 될 경우만 활성 ---
+# git-lfs
+
+# ------------------------------------------------------------------------------
+#  참고: 공개판 코드 자체는 rasterio/laspy/shapely 가 모두 optional import 패턴.
+#        importer.py 만 rasterio 필수. UI에서 importer 호출이 가드된 상태이므로
+#        apt 패�

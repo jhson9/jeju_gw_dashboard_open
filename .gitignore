@@ -91,3 +91,36 @@ temp_extract/
 필독사항.txt
 작업메모.txt
 TODO_personal.txt
+# === 외부 공개판 보안·정리 정책 (2026-06-01) ===
+!.env.example
+# V2 잔존 옛 공개판 탭 — 메인 V3 의 tab01~tab43 이 정답. 옛 파일은 push 제외
+src/dashboard/tabs/tab0_overview.py
+src/dashboard/tabs/tab1_watershed.py
+src/dashboard/tabs/tab2_rainfall.py
+src/dashboard/tabs/tab3_gwlevel.py
+src/dashboard/tabs/tab4_admin.py
+src/dashboard/tabs/tab5_map.py
+src/dashboard/tabs/tab6_ag_search.py
+src/dashboard/tabs/tab7_ag_usage.py
+src/dashboard/tabs/tab8_ag_quality.py
+src/dashboard/tabs/tab9_ag_stats.py
+
+# 관리자 전용 (외부 공개 금지)
+src/dashboard/tabs/tab99_admin.py
+
+# 메인 V3 의 dev 폴더 (있다면)
+src/dashboard/tabs/_archive/
+
+# 마이그레이션 백업
+*.before_migration_260601.bak
+*.before_tab99_removal.bak
+*.before_disable.bak
+
+# Python 캐시
+*.pyc
+*.pyo
+
+# === 2026-06-01 root �ӽ� ���� �߰� ���� ===
+_cowork_write_test.tmp
+*.zip
+Screenshot_*

@@ -68,6 +68,17 @@ from tqdm import tqdm
 import config
 
 
+# CLI 실행 호환: streamlit 가 없을 때 no-op 로 폴백. 같은 객체 재사용 보장
+# (effective_rainfall.aggregate_* 의 hash_funcs={pd.DataFrame: id} 와 결합해
+# 불필요 재집계 차단).
+try:
+    import streamlit as _st
+    _asos_cache = _st.cache_data(ttl=300, show_spinner=False, max_entries=2)
+except Exception:
+    def _asos_cache(fn):
+        return fn
+
+
 # ==============================================================================
 #  ■ 수집 항목 정의
 # ==============================================================================
@@ -250,17 +261,42 @@ def fetch_with_retry(year: int, station_id: int, station_name: str,
                 print(msg)
             return None, True  # fatal_error=True → 전체 수집 중단
 
-        # 재시도 가능한 오류
+        # P4-3 (2026-05-29): API_ERROR[03] (No Data) 는 재시도해도 동일 결과.
+        # 무의미한 호출/대기 회피. 같은 해 다른 지점은 정상일 수 있어 fatal 은 아님.
+        if status.startswith("API_ERROR[03]"):
+            msg = f"   ⚪ [{year}년 {station_name}] No Data — 재시도 생략"
+            if pbar:
+                pbar.write(msg)
+            else:
+                print(msg)
+            return None, False
+
+        # P4-3: API_ERROR[22] (트래픽 초과) 는 즉시 fatal — 지수 백오프로도 회복 불가.
+        # 일일 호출 한도라 다음 날까지 대기 필요.
+        if status.startswith("API_ERROR[22]"):
+            msg = (f"   ❌❌ [{year}년 {station_name}] API 트래픽 초과 (일일 한도):\n"
+                   f"        {status}\n"
+                   f"        👉 내일 다시 실행하세요. 전체 수집 중단.")
+            if pbar:
+                pbar.write(msg)
+            else:
+                print(msg)
+            return None, True
+
+        # 재시도 가능한 오류 — 지수 백오프(5/10/20초)
         if status.startswith("RETRY") or status.startswith("API_ERROR[0"):
             if attempt < config.KMA_API_MAX_RETRIES - 1:
+                # P4-3: 고정 5초 → 지수 백오프 (base * 2^attempt)
+                base_delay = config.KMA_API_RETRY_DELAY
+                actual_delay = base_delay * (2 ** attempt)
                 msg = (f"   ⏳ [{year}년 {station_name}] {status}\n"
-                       f"        {config.KMA_API_RETRY_DELAY}초 후 재시도... "
-                       f"({attempt + 1}/{config.KMA_API_MAX_RETRIES})")
+                       f"        {actual_delay}초 후 재시도... "
+                       f"({attempt + 1}/{config.KMA_API_MAX_RETRIES}, 지수 백오프)")
                 if pbar:
                     pbar.write(msg)
                 else:
                     print(msg)
-                time.sleep(config.KMA_API_RETRY_DELAY)
+                time.sleep(actual_delay)
                 continue
             else:
                 msg = f"   ❌ [{year}년 {station_name}] 최대 재시도 초과: {status}"
@@ -388,8 +424,14 @@ def get_collected_years_by_station(existing_df: pd.DataFrame) -> dict:
         # 현재 연도는 진행 중이므로 재수집 대상
         if year == current_year:
             continue
-        # 360일 이상이면 '완전한 연도'로 간주
-        if count >= 360:
+        # 평년 365 / 윤년 366 일을 모두 채운 해만 '완전'으로 간주 (V6 수정
+        # 2026-05-27). 이전 '360일 이상' 기준은 360~364일짜리 해를 영구히
+        # 미완성으로 남겨, 인터넷에 연결돼도 빠진 날을 채우지 못했음. 이제
+        # 완전치 않은 과거 연도는 재수집 대상에 포함되어, 온라인일 때 누락분이
+        # 보강된다(오프라인이면 수집 시도가 실패해도 기존 자료는 유지).
+        import calendar as _cal
+        expected_days = 366 if _cal.isleap(year) else 365
+        if count >= expected_days:
             result.setdefault(station, set()).add(year)
 
     return result
@@ -568,7 +610,12 @@ def collect_asos_data(start_year: int = None, end_year: int = None,
     if not combined.empty:
         combined = combined.sort_values(by=["지점명", "일시"]).reset_index(drop=True)
         csv_path = get_output_csv_path()
-        combined.to_csv(csv_path, index=False, encoding="utf-8-sig")
+        # Atomic write — Windows 에서 사용자가 Excel 로 CSV 열어둔 채 수집 실행
+        # 시 PermissionError 회피. tmp 에 쓴 뒤 os.replace 로 원자적 rename.
+        import os
+        tmp_path = csv_path.with_suffix(csv_path.suffix + ".tmp")
+        combined.to_csv(tmp_path, index=False, encoding="utf-8-sig")
+        os.replace(tmp_path, csv_path)
         print(f"\n✅ 저장 완료: {csv_path}")
         print(f"   총 레코드: {len(combined):,}개")
         print(f"   기간: {combined['일시'].min().date()} ~ {combined['일시'].max().date()}")
@@ -580,16 +627,21 @@ def collect_asos_data(start_year: int = None, end_year: int = None,
 # ==============================================================================
 #  ■ 6. 대시보드에서 사용할 헬퍼 함수
 # ==============================================================================
+@_asos_cache
 def load_asos_data() -> pd.DataFrame:
     """
     대시보드에서 저장된 ASOS CSV를 읽어올 때 사용합니다.
+
+    streamlit 환경에서는 자동 캐시(ttl=300, max_entries=2). 모든 호출처가
+    같은 객체를 받으므로 하위 hash_funcs={DataFrame: id} 캐시가 통일됨.
     """
     csv_path = get_output_csv_path()
     if not csv_path.exists():
         return pd.DataFrame()
 
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
-    df["일시"] = pd.to_datetime(df["일시"])
+    df["일시"] = pd.to_datetime(df["일시"], errors="coerce")
+    df = df.dropna(subset=["일시"])
     return df
 
 

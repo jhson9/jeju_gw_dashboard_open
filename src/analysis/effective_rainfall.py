@@ -31,17 +31,26 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
+import logging
+
 import pandas as pd
 import numpy as np
 import streamlit as st
 
 import config
 
+# P5-4 (2026-05-29): 모듈 표준 logger. print() 대체용으로 점진적 전환 권장.
+logger = logging.getLogger(__name__)
+
 
 # ==============================================================================
 #  ■ 1. 월별 집계
 # ==============================================================================
-@st.cache_data(ttl=600, show_spinner=False)
+#  hash_funcs={pd.DataFrame: id} — asos_df 통째로 hash 하면 매번 캐시 미스.
+#  asos_collector.load_asos_data() 가 cache 적용된 함수라 같은 객체 반환 →
+#  id(asos_df) 가 5분간 같은 값 → 이 함수도 cache hit. 호출처 13곳 시그니처
+#  변경 없이 캐시 효율만 끌어올림 (사용자 요청 2026-05-09).
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8, hash_funcs={pd.DataFrame: id})
 def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     """
     일별 ASOS 데이터를 '지점 × 연월' 단위로 집계.
@@ -65,11 +74,13 @@ def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     """
     if asos_df.empty:
         return pd.DataFrame(columns=["지점명", "연월", "월강수량(mm)",
-                                     "유효강수일수(일)", "평균기온(°C)",
+                                     "유효강수일수(일)", "집계일수(일)",
+                                     "평균기온(°C)",
                                      "최저기온(°C)", "최고기온(°C)"])
 
     df = asos_df.copy()
-    df["일시"] = pd.to_datetime(df["일시"])
+    df["일시"] = pd.to_datetime(df["일시"], errors="coerce")
+    df = df.dropna(subset=["일시"])
     df["연월"] = df["일시"].dt.strftime("%Y-%m")
 
     # 유효강수일 플래그 (일강수량 >= 5mm)
@@ -77,10 +88,16 @@ def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     df["유효강수일"] = (df["일강수량(mm)"] >= threshold).astype(int)
 
     # 집계
+    #  - 월강수량 sum 에 min_count=1 적용 → 해당 월에 강수 관측치가 하나도
+    #    없으면(전부 NaN) 0 이 아니라 NaN 반환. (V1 수정 2026-05-27)
+    #  - "집계일수(일)": 강수량 관측치가 존재한 일수. 진행 중인 당월(M)처럼
+    #    부분월인지 호출부가 판별할 수 있도록 추가. (예: 4월 1~15일만 수집된
+    #    경우 집계일수=15 → "부분월" 로 표기/제외 가능)
     monthly = df.groupby(["지점명", "연월"]).agg(
         **{
-            "월강수량(mm)":     ("일강수량(mm)", "sum"),
+            "월강수량(mm)":     ("일강수량(mm)", lambda s: s.sum(min_count=1)),
             "유효강수일수(일)": ("유효강수일", "sum"),
+            "집계일수(일)":     ("일강수량(mm)", "count"),
             "평균기온(°C)":     ("평균기온(°C)", "mean"),
             "최저기온(°C)":     ("최저기온(°C)", "min"),
             "최고기온(°C)":     ("최고기온(°C)", "max"),
@@ -100,7 +117,8 @@ def aggregate_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
 #     기존 HTML 대시보드 v8의 로직과 일치:
 #     오늘이 16일 이후이면 M 기간 = 당월 1~15일 (반월)
 # ==============================================================================
-@st.cache_data(ttl=600, show_spinner=False)
+# aggregate_monthly 와 동일 이유로 hash_funcs={pd.DataFrame: id} 적용.
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8, hash_funcs={pd.DataFrame: id})
 def aggregate_half_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
     """
     매월 1~15일 데이터만 집계.
@@ -117,7 +135,8 @@ def aggregate_half_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
                                      "유효강수일수(일)_반월"])
 
     df = asos_df.copy()
-    df["일시"] = pd.to_datetime(df["일시"])
+    df["일시"] = pd.to_datetime(df["일시"], errors="coerce")
+    df = df.dropna(subset=["일시"])
 
     # 1~15일만 필터링
     df = df[df["일시"].dt.day <= config.HALF_MONTH_BOUNDARY_DAY].copy()
@@ -132,8 +151,9 @@ def aggregate_half_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
 
     half = df.groupby(["지점명", "연월"]).agg(
         **{
-            "월강수량(mm)_반월":   ("일강수량(mm)", "sum"),
+            "월강수량(mm)_반월":   ("일강수량(mm)", lambda s: s.sum(min_count=1)),
             "유효강수일수(일)_반월": ("유효강수일", "sum"),
+            "집계일수(일)_반월":   ("일강수량(mm)", "count"),
         }
     ).reset_index()
     half["월강수량(mm)_반월"] = half["월강수량(mm)_반월"].round(1)
@@ -204,9 +224,10 @@ def get_baseline_average(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
     예) M = 2026-04,  N=5 → 2021~2025년 4월 평균
        M-1 = 2026-03, N=5 → 2021~2025년 3월 평균
 
-    반월(M=당월 1~15일) 기간인 경우, 반월 집계값을 사용하고,
-    공식에 따라 ×0.5 계수를 곱한 값과 '그대로의 값' 둘 다 반환할 수 있지만
-    본 함수는 '그대로의 평균'을 반환합니다. 필요 시 호출부에서 ×0.5 적용.
+    반월(M=당월 1~15일) 기간인 경우, '반월 직전평균'(prior years 의 1~15일
+    집계, half_df)을 그대로 반환합니다. 실측도 반월이라 동일 단위 비교이므로
+    ×0.5 계수는 적용하지 않습니다(적용 시 이중 할인 → 오류). 자세한 배경은
+    period_calculator 상단 'L1' 주석 참고.
 
     Parameters
     ----------
@@ -262,6 +283,11 @@ def get_baseline_average(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
 # ==============================================================================
 #  ■ 5. M-2 / M-1 / M 비교표 생성
 # ==============================================================================
+# 사용자 요청 2026-05-09: app.py 가 매 rerun 마다 두 번 호출 (강수량 + 유효강수)
+# → 캐시 없이는 매 탭 변경 시 재계산. asos_df 는 id 기반, periods·n_years 는
+# 기본 hash. inner aggregate_monthly 가 이미 캐시되어 있어도, build_comparison_table
+# 자체의 melt + groupby 비용이 추가로 누적되어 캐싱 가치 있음.
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8, hash_funcs={pd.DataFrame: id})
 def build_comparison_table(asos_df: pd.DataFrame, periods: dict,
                            metric: str = "월강수량(mm)",
                            n_years: int = None) -> pd.DataFrame:
@@ -310,22 +336,25 @@ def build_comparison_table(asos_df: pd.DataFrame, periods: dict,
             "연월": p.get("label", f"{p['year']}-{p['month']:02d}"),
         }
 
+        # 직전 N년 기준연도 범위 — '의도된' 윈도우(p.year-n_years ~ p.year-1)로
+        # 표기. (V10 수정 2026-05-27) 기존엔 '첫 지점의 used_years' 로 잡혀,
+        # 그 지점에 결측 연도가 있으면 표시 범위가 실제와 달라지고 지점마다
+        # 다른 연도집합으로 평균이 계산됐는데도 단일 라벨로 보였음. 이제 라벨은
+        # 항상 요청한 N년 윈도우를 명확히 나타낸다.
+        if n_years >= 1:
+            row["기준연도"] = f"{p['year'] - n_years}~{p['year'] - 1}"
+        else:
+            row["기준연도"] = "-"
+
         # 각 지점별 실측 & 평균
         for station in stations:
             actual = get_period_value(monthly, half, p, station, metric=metric)
-            avg, used_years = get_baseline_average(
+            avg, _used_years = get_baseline_average(
                 monthly, half, p, station, metric=metric, n_years=n_years
             )
 
             row[f"{station}_실측"] = actual
             row[f"{station}_평균"] = round(avg, 1) if avg is not None else None
-
-            # 직전 N년 기준 연도 범위 (모든 지점에서 동일하므로 한 번만 저장)
-            if "기준연도" not in row and used_years:
-                row["기준연도"] = f"{min(used_years)}~{max(used_years)}"
-
-        if "기준연도" not in row:
-            row["기준연도"] = "-"
 
         rows.append(row)
 

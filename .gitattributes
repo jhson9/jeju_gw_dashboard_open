@@ -1,0 +1,48 @@
+# =============================================================================
+# Git LFS 추적 패턴 — 공개판 jeju_gw_dashboard_open
+# 드론 시각화 자산(정사영상 / DSM / 포인트클라우드 / 3D 타일) 대상
+# =============================================================================
+
+# ---- 정사영상 / DSM (GeoTIFF) ----------------------------------------------
+*.tif filter=lfs diff=lfs merge=lfs -text
+*.tiff filter=lfs diff=lfs merge=lfs -text
+*.TIF filter=lfs diff=lfs merge=lfs -text
+
+# ---- 포인트 클라우드 -------------------------------------------------------
+*.ply filter=lfs diff=lfs merge=lfs -text
+*.las filter=lfs diff=lfs merge=lfs -text
+*.laz filter=lfs diff=lfs merge=lfs -text
+
+# ---- Cesium 3D Tiles (Batched 3D Model) ------------------------------------
+# b3dm 파일은 개당 작지만(<1MB) 총 수천 개 → LFS로 묶지 않고 일반 git 추적이
+# 더 효율적. 따라서 b3dm은 일부러 LFS 미적용. 단, 100MB+ 단일 b3dm이 생기면
+# 그때만 개별 등록.
+# *.b3dm filter=lfs diff=lfs merge=lfs -text   # 비활성
+
+# ---- preview 이미지 (50~92MB 범위) -----------------------------------------
+# preview.png 도 90MB 근처라 일반 git은 가능하나 LFS로 묶으면 clone이 빨라짐.
+# repo 전체 LFS 한도(10GB)에 여유 있으면 LFS 권장.
+data/04_drone/**/derived/preview.png filter=lfs diff=lfs merge=lfs -text
+
+# ---- 관정 카드 PDF / 시추주상도 (이번 동기화 범위 밖이지만 향후 대비) ------
+# *.pdf filter=lfs diff=lfs merge=lfs -text       # 도입 시 활성
+
+# ---- 텍스트 파일 줄바꿈 정책 (Windows 작업환경) ------------------------------
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+
+# ---- 바이너리 안전 (LFS 미적용이지만 binary 명시) ----------------------------
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.b3dm binary
+
+# ---- well_card 관정 카드 PDF (2025년분만 포함, ~1.1GB / 882 files) ----
+*.pdf filter=lfs diff=lfs merge=lfs -text

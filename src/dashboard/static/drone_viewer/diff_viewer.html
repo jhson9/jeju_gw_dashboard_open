@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<!--
+  드론 정사영상 시계열 비교 뷰어 (Build 2.1, 2026-05-24)
+
+  설계:
+   - 좌우 분할 (50/50) 두 Leaflet 지도 + Leaflet.Sync 양방향 동기화
+   - 한쪽 이동/zoom 시 다른쪽도 동일 좌표/축척으로 따라감 (사용자 요청)
+   - pdf_server :8766 의 drone_viewer 소스로 서빙 → same-origin
+   - 정사영상은 pdf_server drone 소스의 preview.png (tab32 와 동일 데이터)
+   - V-World 타일: 로컬 캐시(8501) + API HD (zoom 15+)
+
+  파라미터:
+    query: l=<left_mission_id>&r=<right_mission_id>   ← Streamlit iframe 재생성 트리거
+    hash:  left_img, left_bounds, left_label,
+           right_img, right_bounds, right_label,
+           vworld_key, host_8501                       ← V-World 로컬 타일 URL 기반
+
+  관련 메모리: [[project-drone-purpose]] 시계열 변화 감지가 드론 주요 목적
+-->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>드론 정사영상 시계열 비교</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet.Sync — 두 map 인스턴스 동기화 plugin (5KB).
+       양방향 sync 로 좌·우 어느쪽 조작해도 반대편이 따라감. -->
+  <script src="https://unpkg.com/leaflet.sync@0.2.4/L.Map.Sync.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #split { display: flex; height: 100%; width: 100%; }
+    .panel { flex: 1; position: relative; min-width: 0; }
+    .panel + .panel { border-left: 2px solid #2a2a28; }
+    .map { width: 100%; height: 100%; }
+    .label {
+      position: absolute; top: 8px; left: 8px; z-index: 1000;
+      background: rgba(0,0,0,0.72); color: #fff;
+      padding: 4px 12px; border-radius: 4px;
+      font-size: 13px; font-weight: 600;
+      pointer-events: none;
+      max-width: 80%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .label.left  { border-left: 4px solid #4a90e2; }
+    .label.right { border-left: 4px solid #e6a23c; }
+    #err {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); z-index: 9999;
+      background: rgba(160,40,40,0.92); color: #fff;
+      padding: 20px 30px; border-radius: 6px;
+      font-size: 14px; display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="split">
+  <div class="panel">
+    <div class="label left" id="lbl-left">◀ 좌측</div>
+    <div class="map" id="map-left"></div>
+  </div>
+  <div class="panel">
+    <div class="label right" id="lbl-right">우측 ▶</div>
+    <div class="map" id="map-right"></div>
+  </div>
+</div>
+<div id="err"></div>
+<script>
+// hash 변경 시 자동 reload — Streamlit 미션 전환 시 iframe src 의 query 가
+// 바뀌면 자동 재생성, hash 만 바뀌면 이 listener 가 보완.
+window.addEventListener('hashchange', () => location.reload());
+
+(function () {
+  const errEl = document.getElementById('err');
+  const showErr = (m) => { errEl.textContent = '⚠ ' + m; errEl.style.display = 'block'; };
+
+  try {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const leftImg    = p.get('left_img');
+    const leftTiles  = p.get('left_tiles');          // XYZ 슬리피맵 (zoom 12~23, 무한 해상도)
+    const leftBoundsStr  = p.get('left_bounds');     // lat_min,lon_min,lat_max,lon_max
+    const leftLabel  = p.get('left_label') || '좌측';
+    const rightImg   = p.get('right_img');
+    const rightTiles = p.get('right_tiles');
+    const rightBoundsStr = p.get('right_bounds');
+    const rightLabel = p.get('right_label') || '우측';
+    const vworldKey  = (p.get('vworld_key') || '').trim();
+    const host8501   = p.get('host_8501') || (location.protocol + '//' + location.hostname + ':8501');
+
+    if (!leftImg || !leftBoundsStr || !rightImg || !rightBoundsStr) {
+      showErr('필수 파라미터 누락 (left_img, left_bounds, right_img, right_bounds)');
+      return;
+    }
+
+    function parseBounds(s) {
+      const [a, b, c, d] = s.split(',').map(parseFloat);
+      // L.latLngBounds expects ([[lat_min, lon_min], [lat_max, lon_max]])
+      return [[a, b], [c, d]];
+    }
+    const leftBounds  = parseBounds(leftBoundsStr);
+    const rightBounds = parseBounds(rightBoundsStr);
+
+    // ── 공통 초기 뷰 계산 ────────────────────────────────────────
+    // 두 미션의 교차영역(intersection)을 초기 뷰로 사용.
+    // 교차영역이 없으면 두 중심의 평균점 ± 작은 BBOX 절반 크기를 사용.
+    // RTK Fix 100% 일관 적용 시 두 중심이 수 cm 이내로 수렴 → 자연 정렬.
+    function calcCommonBounds(lb, rb) {
+      // lb/rb = [[lat_min, lon_min], [lat_max, lon_max]]
+      const latMin = Math.max(lb[0][0], rb[0][0]);
+      const lonMin = Math.max(lb[0][1], rb[0][1]);
+      const latMax = Math.min(lb[1][0], rb[1][0]);
+      const lonMax = Math.min(lb[1][1], rb[1][1]);
+      if (latMin < latMax && lonMin < lonMax) {
+        // 교차영역 존재 → 그 영역으로 fit
+        return [[latMin, lonMin], [latMax, lonMax]];
+      }
+      // 교차영역 없음 → 두 중심의 평균 + 작은 BBOX 절반 크기
+      const cLat = ((lb[0][0]+lb[1][0]) + (rb[0][0]+rb[1][0])) / 4;
+      const cLon = ((lb[0][1]+lb[1][1]) + (rb[0][1]+rb[1][1])) / 4;
+      const hLat = Math.min((lb[1][0]-lb[0][0]), (rb[1][0]-rb[0][0])) / 2;
+      const hLon = Math.min((lb[1][1]-lb[0][1]), (rb[1][1]-rb[0][1])) / 2;
+      return [[cLat - hLat, cLon - hLon], [cLat + hLat, cLon + hLon]];
+    }
+    const commonBounds = calcCommonBounds(leftBounds, rightBounds);
+
+    document.getElementById('lbl-left').textContent  = '◀ ' + leftLabel;
+    document.getElementById('lbl-right').textContent = rightLabel + ' ▶';
+
+    // 초기 중심: 공통 영역(교차영역) 중심 사용
+    const cy = (commonBounds[0][0] + commonBounds[1][0]) / 2;
+    const cx = (commonBounds[0][1] + commonBounds[1][1]) / 2;
+
+    // 1x1 transparent GIF — TileLayer 의 404 응답을 broken image 대신 투명 처리.
+    // 이 영역엔 아래 layer (ImageOverlay fallback) 가 보임.
+    const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    function makeMap(elId, imgUrl, tileTpl, bounds) {
+      const map = L.map(elId, {
+        center: [cy, cx],
+        zoom: 18,
+        maxZoom: 23,
+        minZoom: 8,
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      // ⭐ Leaflet pane 으로 명시적 z-index 지정 — 22 에이전트 합의:
+      //   tilePane (default 200) → V-World 배경
+      //   orthoBase  (410)        → ImageOverlay fallback (BBOX 전체)
+      //   orthoHD    (420)        → DJI Terra XYZ 타일 (정밀 영역만)
+      //   overlayPane (default 400) → BBOX 사각형
+      //   이렇게 명시하면 layer 추가 순서·zoom·toggle 무관하게 항상 같은 z-order.
+      map.createPane('orthoBase');
+      map.getPane('orthoBase').style.zIndex = 410;
+      map.createPane('orthoHD');
+      map.getPane('orthoHD').style.zIndex = 420;
+
+      // V-World 로컬 캐시 (zoom 8~14) — cross-origin 이미지 OK
+      const baseLocal = L.tileLayer(
+        host8501 + '/app/static/map_tiles/Base/{z}/{x}/{y}.png',
+        {
+          attribution: 'ⓒ V-World (local cache)',
+          maxZoom: 23, maxNativeZoom: 14, minZoom: 8,
+        }
+      );
+      const satLocal = L.tileLayer(
+        host8501 + '/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg',
+        {
+          attribution: 'ⓒ V-World (local cache)',
+          maxZoom: 23, maxNativeZoom: 14, minZoom: 8,
+        }
+      );
+
+      // V-World API HD (zoom 15~19) — 인터넷 연결 시
+      let baseHD = null, satHD = null;
+      if (vworldKey) {
+        baseHD = L.tileLayer(
+          'https://api.vworld.kr/req/wmts/1.0.0/' + vworldKey + '/Base/{z}/{y}/{x}.png',
+          { attribution: 'ⓒ V-World', minZoom: 15, maxZoom: 19 }
+        );
+        satHD = L.tileLayer(
+          'https://api.vworld.kr/req/wmts/1.0.0/' + vworldKey + '/Satellite/{z}/{y}/{x}.jpeg',
+          { attribution: 'ⓒ V-World', minZoom: 15, maxZoom: 19 }
+        );
+      }
+
+      // 기본 layer: 로컬 일반 + (있으면) HD overlay
+      baseLocal.addTo(map);
+      if (baseHD) baseHD.addTo(map);
+
+      // ⭐ 정사영상 하이브리드 (2026-05-29 v3):
+      //   v1: 둘 다 addTo + opacity 0.95/1.0 → 중첩 잔상 → v2: PNG fallback off → 확대 시 안 보임.
+      //   v3: 두 layer 모두 addTo + opacity 1.0 통일 + pane z-index 로 TileLayer 가 위.
+      //
+      //   layer 역할:
+      //     - orthoFallback (PNG ImageOverlay, pane orthoBase z=410):
+      //         BBOX 전체를 8192px PNG 로 채움. 모든 zoom 에서 표시.
+      //         TileLayer 가 maxNativeZoom 초과 줌(24+) 또는 404 영역(sparse mesh)
+      //         에서 투명할 때 사용자에게 항상 영상이 보이도록 보장.
+      //     - orthoTile (XYZ TileLayer, pane orthoHD z=420):
+      //         dense 영역에서 zoom 별 최적 해상도 제공. PNG 위를 덮어 정밀도 향상.
+      //         404 영역엔 errorTileUrl(transparent) → 아래 PNG 가 보임.
+      //
+      //   opacity 1.0 통일로 두 layer 동일 픽셀 정렬 시 잔상 없음. 정렬 어긋나면
+      //   bbox 메타 부정확 신호 → meta_validator 로 검증 가능.
+      let orthoFallback = null, orthoTile = null;
+      if (imgUrl) {
+        orthoFallback = L.imageOverlay(imgUrl, bounds, {
+          pane: 'orthoBase',
+          opacity: 1.0,
+          interactive: false,
+        }).addTo(map);
+      }
+      if (tileTpl) {
+        orthoTile = L.tileLayer(tileTpl, {
+          pane: 'orthoHD',
+          attribution: 'ⓒ DJI Terra',
+          minZoom: 12, maxZoom: 23, maxNativeZoom: 22,
+          opacity: 1.0, tms: false,
+          // 404 = sparse mesh / out-of-range zoom → 투명 → 아래 PNG 가 노출
+          errorTileUrl: TRANSPARENT_PIXEL,
+        }).addTo(map);
+      }
+
+      // BBOX 사각형 (시각 가이드 — 정사영상 영역 표시)
+      L.rectangle(bounds, {
+        color: '#3388ff', weight: 2, fill: false, interactive: false,
+      }).addTo(map);
+
+      // Layer 전환 control
+      const baseLayers = {
+        'V-World 일반': baseLocal,
+        'V-World 위성': satLocal,
+      };
+      const overlays = {};
+      if (orthoTile)     overlays['드론 정사영상 (HD 타일)'] = orthoTile;
+      if (orthoFallback) overlays['드론 정사영상 (기본 PNG)'] = orthoFallback;
+      if (baseHD) overlays['V-World 일반 HD (zoom 15+)'] = baseHD;
+      if (satHD)  overlays['V-World 위성 HD (zoom 15+)'] = satHD;
+      L.control.layers(baseLayers, overlays, { collapsed: true, position: 'bottomright' }).addTo(map);
+
+      return map;
+    }
+
+    const leftMap  = makeMap('map-left',  leftImg,  leftTiles,  leftBounds);
+    const rightMap = makeMap('map-right', rightImg, rightTiles, rightBounds);
+
+    // 양방향 동기화 — 어느 쪽을 움직이든 반대편이 따라옴.
+    // 사용자 의도 = "우측 기준 좌측이 따라옴" 이지만 양방향이 더 유연.
+    // syncCursor:true 로 마우스 커서 위치도 표시 (어디를 보고 있는지 시각 비교 ↑).
+    leftMap.sync(rightMap,  { syncCursor: true, syncCursorMarkerOptions: {
+      radius: 6, fillOpacity: 0.4, color: '#e6a23c', weight: 2,
+    }});
+    rightMap.sync(leftMap, { syncCursor: true, syncCursorMarkerOptions: {
+      radius: 6, fillOpacity: 0.4, color: '#4a90e2', weight: 2,
+    }});
+
+    // 초기 view: 우측 bounds 에 fit (사용자 의도 = 우측 기준)
+    // padding 5px (이전 20) — viewport 를 BBOX 에 더 가깝게 맞춰 404 (BBOX 밖)
+    // 타일 요청 최소화. sync 적용 후 호출 → 좌측도 같은 view.
+    setTimeout(() => {
+      rightMap.fitBounds(rightBounds, { padding: [5, 5] });
+    }, 200);
+
+    // window resize 시 두 map 모두 invalidateSize
+    function onResize() { leftMap.invalidateSize(); rightMap.invalidateSize(); }
+    window.addEventListener('resize', onResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(onResize);
+      ro.observe(document.getElementById('split'));
+    }
+
+  } catch (e) {
+    showErr('초기화 실패: ' + (e && e.message ? e.message : e));
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

@@ -25,7 +25,14 @@
 #  【원본 HTML 대시보드의 로직】
 #  - 기준일 1~15일  → 전월=M,  전전월=M-1, 3개월전=M-2
 #  - 기준일 16~말일 → 당월1~15일=M, 전월=M-1, 전전월=M-2
-#                     (M 기간의 직전평균에 ×0.5 계수 적용)
+#
+#  【반월 ×0.5 계수에 대한 주의 (L1, 2026-05-27)】
+#   원본 HTML 은 '반월 실측' 을 '전체월 직전평균' 과 비교하느라 직전평균에
+#   ×0.5 를 곱해 스케일을 맞췄다. 그러나 본 Python 이식판은 반월 실측을
+#   '반월(1~15일) 직전평균' 과 동일 단위로 비교하므로(effective_rainfall 의
+#   half_df 사용) ×0.5 를 적용하면 오히려 이중 할인이 되어 틀린다. 따라서
+#   coefficient 필드는 후방호환·표기용으로만 남겨두며, 어떤 계산에도 곱하지
+#   않는다. (전 호출부 grep 결과 실제로 곱하는 곳 없음.)
 #  - 비교 기준연도: 각 기간(M-2·M-1·M)의 연도 기준으로 독립 계산
 #    예) M-2 = 2025년 12월 → 직전 5년 기준: 2020~2024년
 #        M   = 2026년 2월  → 직전 5년 기준: 2021~2025년
@@ -35,11 +42,20 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+    _KST = ZoneInfo("Asia/Seoul")
+except Exception:   # pragma: no cover — 구버전 폴백
+    _KST = None
 from typing import Optional
 import calendar
+import logging
 
 import config
+
+# P5-4 (2026-05-29): 모듈 표준 logger.
+logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -100,7 +116,12 @@ def compute_periods(base_date: Optional[date] = None) -> dict:
         }
     """
     if base_date is None:
-        base_date = date.today()
+        # KST 기준 today — 운영 환경이 UTC 일 때 한국 자정~09시 사이에
+        # 전날로 잡혀 15/16일 M 경계 분기가 틀어지는 회귀 차단(2026-05-28).
+        if _KST is not None:
+            base_date = datetime.now(_KST).date()
+        else:
+            base_date = date.today()
 
     if base_date.day <= config.HALF_MONTH_BOUNDARY_DAY:
         # === 모드 1: 전월 모드 (기준일 1~15일) ===

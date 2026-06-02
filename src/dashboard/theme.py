@@ -20,6 +20,12 @@ GLOBAL_CSS = """
     --color-border-info:      #85b7eb;
     --color-success:          #1d9e75;
     --color-danger:           #e24b4a;
+    /* 사용자 요청 2026-05-09: 자주 쓰이는 hex 토큰화 */
+    --color-text-tertiary:    #7f7f7f;
+    --color-accent-darkred:   #C00000;
+    --color-accent-blue-2:    #305496;
+    --color-accent-blue-3:    #0a316e;
+    --color-accent-quality-max: #A50026;
   }
 
   /* ==================================================
@@ -190,6 +196,48 @@ GLOBAL_CSS = """
   .dn { color: #e24b4a; font-weight: 500; }
 
   /* ==================================================
+     타이포그래피 클래스 — 인라인 font-size 대체용
+     모든 탭은 아래 클래스를 사용. 인라인 font-size 신규 도입 금지.
+     5단계 계층 (사용자 요청 2026-05-09 디자인 통일):
+       L1 .page-title       페이지 제목 (대시보드 전체)
+       L2 .tab-title        탭 헤더 (⑤ 관정 검색 등)
+       L3 .section-title    섹션 제목 (이모지 큰 사이즈 별도)
+       L4 .subsection-title 서브섹션 / .chart-title (차트 위)
+       L5 .caption-*        캡션·각주
+     ================================================== */
+  /* 사용자 요청 2026-05-10 (재조정): page-title 30 고정, 헤드 축소.
+     이전 ×2 가 너무 컸음 → tab 27 / section 22 / subsection 20 / chart 18 /
+     table-header 15. 내부 글자(table-cell 17.25, caption ×1.5)는 유지. */
+  .page-title       { font-size: 30px !important; font-weight: 700;
+                      color: #185fa5; line-height: 1.2;
+                      margin: 0 0 6px; padding: 0; }
+  .page-title .emoji { font-size: 28px !important; line-height: 1;
+                       margin-right: 0.25em; vertical-align: -2px; }
+  /* L1 탭 헤더 — 27 */
+  .tab-title        { font-size: 27px !important; font-weight: 600;
+                      color: #1a1a18; line-height: 1.25;
+                      margin: 0 0 6px; padding: 0; }
+  /* L2 섹션 제목 — 22, 이모지 28 (비례) */
+  .section-title    { font-size: 22px !important; font-weight: 700;
+                      color: #1a1a18; line-height: 1.3; margin: 0 0 6px; }
+  .section-title .emoji { font-size: 28px !important; line-height: 1;
+                          margin-right: 0.3em; vertical-align: -1px; }
+  /* L3 .subsection-title — 20 */
+  .subsection-title { font-size: 20px !important; font-weight: 700;
+                      color: #1a1a18; margin: 0 0 4px; }
+  /* L4 .chart-title — 18 */
+  .chart-title      { font-size: 18px !important; font-weight: 700;
+                      color: #1a1a18; margin: 0 0 3px; }
+  /* 사용자 요청 2026-05-10 (재): 본문 클래스 +2~3px (헤더는 유지). */
+  /* 표 헤더 — 15 → 18 */
+  .table-header     { font-size: 18px; font-weight: 600; color: #1a1a18; background: #f5f5f3; }
+  /* 표 셀 — 17.25 → 20 */
+  .table-cell       { font-size: 20px; font-weight: 400; color: #1a1a18; }
+  /* 캡션 — 15 → 17 / 13.5 → 15.5 (보수 +2) */
+  .caption-sm       { font-size: 17px; color: #888; }
+  .caption-xs       { font-size: 15.5px;  color: #888; }
+
+  /* ==================================================
      인쇄 최적화
      ================================================== */
   @media print {
@@ -203,6 +251,19 @@ GLOBAL_CSS = """
     .stTabs [data-baseweb="tab-list"] { display: none !important; }
   }
   @page { size: A4; margin: 15mm; }
+
+  /* ==================================================
+     지도 선택 마커 halo — 사용자 요청 2026-05-09
+     -------------------------------------------------
+     선택된 마커 위에 반투명 외곽 원을 추가해 시각 피드백 강화.
+     pointer-events: none → halo 가 클릭을 가로채지 않음 (다음
+     마커 클릭이 무반응되는 문제 방지).
+     사용처: ag_map_builders.build_search_map / build_usage_map,
+            _tab13_map._render_quality_map, map_helpers.add_station_markers.
+     ================================================== */
+  .leaflet-overlay-pane path.sel-halo {
+    pointer-events: none !important;
+  }
 
   /* ==================================================
      Dataframe selection 하이라이트 약화 (Phase 3 P2)
@@ -219,357 +280,103 @@ GLOBAL_CSS = """
   [data-testid="stDataFrame"] [aria-selected="true"] {
     background-color: rgba(24, 95, 165, 0.15) !important;
   }
-
-  /* ==================================================================
-     모바일/태블릿 반응형 (Build 2.1)
-     ------------------------------------------------------------------
-     기획·디자인 에이전트 합의 사양:
-       Phone   ≤  600px : Galaxy S23 등 — 스택 + 가로스크롤 탭
-       Tablet  601–1024 : Galaxy Tab S10+ 세로 등 — 컴팩트
-       Desktop ≥ 1025px : 기본 940px 레이아웃 유지
-     원칙: 텍스트 가시성 유지, 터치 타깃 ≥44px, 차트/지도는 가로폭 100%.
-     ================================================================== */
-
-  /* ===== TABLET (601 ~ 1024px) ===== */
-  @media (min-width: 601px) and (max-width: 1024px) {
-    .main .block-container {
-      max-width: 96% !important;
-      padding-left: 1rem !important;
-      padding-right: 1rem !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-      font-size: 12px !important;
-      padding: 6px 10px !important;
-    }
-    /* KPI/지표 컬럼 — 폭 좁을 때 자연 줄바꿈 */
-    [data-testid="stHorizontalBlock"] {
-      flex-wrap: wrap !important;
-    }
-    div[data-testid="stRadio"] [role="radiogroup"] label {
-      min-width: 52px !important;
-      font-size: 13px !important;
-    }
-    /* Folium iframe 적정 높이 */
-    iframe[title^="streamlit_folium"] {
-      max-height: 540px !important;
-    }
-    /* 입력 위젯 — Build 2.8: 진짜 누락 셀렉터 fix.
-       에이전트 분석: baseweb 의 닫힌 상태 표시값은 <input> 이 아니라 sibling
-       <div id="..-singleValue"> (StyledSingleValue) 가 carry. input 만 잡으면
-       표시값에 cascade 안 닿음. singleValue 셀렉터 명시 추가 + padding 0. */
-    .stSelectbox div[data-baseweb="select"] {
-      min-height: 48px !important;
-    }
-    .stSelectbox div[data-baseweb="select"] > div {
-      min-height: 48px !important;
-      display: flex !important;
-      align-items: center !important;
-      padding-top: 4px !important;
-      padding-bottom: 4px !important;
-    }
-    .stSelectbox div[data-baseweb="select"],
-    .stSelectbox div[data-baseweb="select"] *:not(svg):not(path) {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      overflow: visible !important;
-    }
-    /* baseweb 닫힌 상태 표시값 — input + singleValue + select-control 4중 보강 */
-    .stSelectbox div[data-baseweb="select"] input,
-    .stSelectbox div[data-baseweb="select"] input[role="combobox"],
-    .stSelectbox div[data-baseweb="select"] [role="combobox"],
-    .stSelectbox div[data-baseweb="select"] div[id$="-singleValue"],
-    .stSelectbox div[data-baseweb="select"] [data-baseweb="select-control"] > div > div {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      height: auto !important;
-      min-height: 0 !important;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      overflow: visible !important;
-    }
-    .stDateInput input,
-    .stTextInput input,
-    .stNumberInput input {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      min-height: 48px !important;
-    }
-  }
-
-  /* ===== PHONE (≤ 600px) ===== */
-  @media (max-width: 600px) {
-    /* 본문 폭 — 좌우 여백 최소화 */
-    .main .block-container {
-      max-width: 100% !important;
-      padding-left: 0.6rem !important;
-      padding-right: 0.6rem !important;
-    }
-
-    /* 페이지 제목 — 살짝 축소 */
-    h1 { font-size: 18px !important; }
-    h2 { font-size: 16px !important; }
-    h3 { font-size: 14px !important; }
-
-    /* ── 탭 리스트 ──
-       10개 탭을 한 줄에 못 담으므로 가로 스크롤 + 스냅.
-       텍스트는 그대로 유지(축약하면 어떤 탭인지 식별 어려움). */
-    .stTabs [data-baseweb="tab-list"] {
-      flex-wrap: nowrap !important;
-      overflow-x: auto !important;
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x proximity;
-      gap: 4px !important;
-      padding: 4px 2px !important;
-      margin-bottom: 0.75rem !important;
-      scrollbar-width: none;
-    }
-    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
-    .stTabs [data-baseweb="tab"] {
-      font-size: 11.5px !important;
-      padding: 8px 10px !important;
-      flex: 0 0 auto !important;
-      scroll-snap-align: start;
-      min-height: 36px !important;
-    }
-
-    /* ── 컬럼 강제 스택 ──
-       대부분의 화면에서 st.columns([..]) 가 가로 비율로 잡혀있음.
-       Phone 에서는 모두 100% 너비로 수직 배치. */
-    [data-testid="stHorizontalBlock"] {
-      flex-wrap: wrap !important;
-      gap: 6px !important;
-    }
-    [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-      flex: 1 1 100% !important;
-      min-width: 100% !important;
-      width: 100% !important;
-    }
-
-    /* ── 라디오 (유역 14개) ── */
-    div[data-testid="stRadio"] [role="radiogroup"] label {
-      min-width: 64px !important;
-      padding: 10px 8px !important;
-    }
-    div[data-testid="stRadio"] [role="radiogroup"] label > div:last-child p {
-      font-size: 13px !important;
-    }
-
-    /* ── 입력 위젯 — 터치 타깃 ≥44px ── */
-    .stSelectbox, .stDateInput, .stTextInput {
-      width: 100% !important;
-    }
-    /* '전체' 같은 한글 받침 클리핑 방지 — font 13px + line-height 1.45 (Build 2.3) */
-    .stSelectbox > div > div, .stDateInput > div > div, .stTextInput > div > div {
-      min-height: 44px !important;
-      font-size: 13px !important;
-      line-height: 1.45 !important;
-    }
-    .stSelectbox div[data-baseweb="select"] > div,
-    .stSelectbox div[data-baseweb="select"] > div > div {
-      font-size: 13px !important;
-      line-height: 1.45 !important;
-    }
-    .stButton > button {
-      min-height: 44px !important;
-      font-size: 13px !important;
-      padding: 10px 14px !important;
-    }
-    /* 파스텔 pill 버튼만은 기존 작은 크기 유지 — wbtn 류 */
-    div[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"] {
-      min-height: 36px !important;
-    }
-
-    /* ── 표 ── */
-    [data-testid="stDataFrame"], [data-testid="stTable"] {
-      max-width: 100% !important;
-      overflow-x: auto !important;
-    }
-
-    /* ── Plotly 차트 ── */
-    .js-plotly-plot, .plotly-graph-div {
-      width: 100% !important;
-    }
-
-    /* ── Folium 지도 ── */
-    iframe[title^="streamlit_folium"] {
-      width: 100% !important;
-      max-height: 460px !important;
-    }
-
-    /* ── 헤더의 베이스라인 pill 배지 ── */
-    .stMarkdown span[style*="border-radius:14px"] {
-      font-size: 10px !important;
-    }
-  }
-
-  /* ===== 가로 모드 폰 / 작은 태블릿 (601 ~ 800) — KPI 2열 ===== */
-  @media (min-width: 601px) and (max-width: 900px) {
-    [data-testid="stHorizontalBlock"] > [data-testid="column"]:has([data-testid="stMetric"]) {
-      flex: 1 1 calc(50% - 8px) !important;
-      min-width: calc(50% - 8px) !important;
-    }
-  }
-
-  /* ====================================================================
-     TABLET LANDSCAPE (1025 ~ 1499.99px) — Build 2.4
-     --------------------------------------------------------------------
-     Galaxy Tab S10+ landscape (~1400~1500px CSS), iPad Pro 13" landscape,
-     일반 10~13인치 태블릿 가로 모드를 정조준한 분기.
-     - 컨테이너를 1280px 까지 확장하여 940px 데스크톱 대비 좌우 여백 ↓
-     - 모든 텍스트/위젯을 한국어 가독성 기준에 맞게 1~2pt 확대
-     - 데스크톱(≥1500px) 은 940px 그대로 유지 (별도 가드)
-     - Tab S10+ 가 viewport=1367+px 를 보고할 가능성이 있어 상한을 1499.99 로
-       확장 (Build 2.4). 일반 PC 모니터는 1920px+ 라 영향 없음.
-     - 분수 px(예: DPR 스케일링으로 1499.5px) 갭 방지를 위해 1499.99 까지
-
-     ※ 명시적으로 손대지 않는 것:
-       1) Folium iframe 높이 — Python 측에서 height=430(컴팩트)/780(풀) 등
-          명시 px 로 넘기는 의도를 CSS 로 덮으면 깨짐. (검증 A/B 합의)
-       2) 탭바 font-size/padding — app.py 의 인라인 <style> (15.4px / 9px 11px)
-          가 더 늦게 로드되어 어차피 이김. cascade 충돌 방지.
-     -------------------------------------------------------------------- */
-  @media (min-width: 1025px) and (max-width: 1499.99px) {
-    .main .block-container,
-    [data-testid="stMain"] .block-container,
-    section.main > div.block-container {
-      max-width: 1280px !important;
-      width: 96% !important;
-      padding-left: 1.5rem !important;
-      padding-right: 1.5rem !important;
-      padding-top: 0.1rem !important;
-    }
-    /* 제목 위계 — 940px 디자인보다 확실히 큼 */
-    h1 { font-size: 24px !important; line-height: 1.25 !important; }
-    h2 { font-size: 19px !important; }
-    h3 { font-size: 17px !important; }
-    h4 { font-size: 15px !important; }
-    /* 본문 — 한국어 14px 가독성 확보 */
-    .stMarkdown p, .stMarkdown li {
-      font-size: 14px !important;
-      line-height: 1.55 !important;
-    }
-    .stCaption, [data-testid="stCaptionContainer"] { font-size: 12px !important; }
-    /* 탭바 — 터치 타깃만 보강 (font-size/padding 은 app.py 인라인이 우선) */
-    .stTabs [data-baseweb="tab"] {
-      min-height: 40px !important;
-    }
-    /* 14 유역 라디오 — 78×14 + 5×13 = 1157px ≤ 1216px(1280-padding).
-       1025~1252px 의 좁은 사브밴드는 wrap 으로 자연 줄바꿈 (graceful). */
-    div[data-testid="stRadio"] [role="radiogroup"] label {
-      min-width: 78px !important;
-      padding: 11px 8px !important;
-    }
-    div[data-testid="stRadio"] [role="radiogroup"] label > div:last-child p {
-      font-size: 14px !important;
-    }
-    /* KPI 메트릭 카드 — Streamlit 기본 위젯만 (인라인 KPI 카드는 영향 X) */
-    [data-testid="stMetricLabel"] { font-size: 13px !important; }
-    [data-testid="stMetricValue"] { font-size: 26px !important; }
-    [data-testid="stMetricDelta"] { font-size: 12px !important; }
-    /* 커스텀 stat-card (theme.render_stat_card) 의 value 영역 — 클래스 hook 사용.
-       tab7:362, tab8:898 등 인라인 22px KPI 카드(class 없음)는 영향 X. */
-    .stMarkdown div.stat-card > div:nth-child(2) {
-      font-size: 18px !important;
-    }
-    /* 입력 위젯 — Build 2.8: 진짜 누락 셀렉터 fix (에이전트 진단 반영).
-       baseweb 의 닫힌 상태 표시값은 <input> 이 아니라 sibling
-       <div id="..-singleValue"> (StyledSingleValue) 가 carry.
-       input + singleValue + select-control 4중 보강으로 cascade 보장. */
-    .stSelectbox > div > div,
-    .stDateInput > div > div,
-    .stTextInput > div > div,
-    .stNumberInput > div > div {
-      min-height: 48px !important;
-    }
-    .stSelectbox div[data-baseweb="select"] {
-      min-height: 48px !important;
-    }
-    .stSelectbox div[data-baseweb="select"] > div {
-      min-height: 48px !important;
-      display: flex !important;
-      align-items: center !important;
-      padding-top: 4px !important;
-      padding-bottom: 4px !important;
-    }
-    .stSelectbox div[data-baseweb="select"],
-    .stSelectbox div[data-baseweb="select"] *:not(svg):not(path) {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      overflow: visible !important;
-    }
-    /* baseweb 닫힌 상태 표시값 — input + singleValue + select-control 4중 보강 */
-    .stSelectbox div[data-baseweb="select"] input,
-    .stSelectbox div[data-baseweb="select"] input[role="combobox"],
-    .stSelectbox div[data-baseweb="select"] [role="combobox"],
-    .stSelectbox div[data-baseweb="select"] div[id$="-singleValue"],
-    .stSelectbox div[data-baseweb="select"] [data-baseweb="select-control"] > div > div {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      height: auto !important;
-      min-height: 0 !important;
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      overflow: visible !important;
-    }
-    /* DateInput / TextInput / NumberInput */
-    .stDateInput input,
-    .stTextInput input,
-    .stNumberInput input {
-      font-size: 12px !important;
-      line-height: 1.8 !important;
-      min-height: 48px !important;
-    }
-    .stButton > button[kind="primary"] {
-      min-height: 48px !important;       /* Build 2.7: 62 → 48 (사용자 피드백) */
-      font-size: 14px !important;
-      padding: 8px 18px !important;
-    }
-    /* 표 — Plotly chart 와의 시각 무게 균형 */
-    [data-testid="stDataFrame"] { font-size: 13px !important; }
-    [data-testid="stTable"] td,
-    [data-testid="stTable"] th {
-      font-size: 13px !important;
-      padding: 6px 8px !important;
-    }
-    .main .block-container table { font-size: 13px !important; }
-    .main .block-container table th,
-    .main .block-container table td { padding: 6px 8px !important; }
-    /* Plotly 라벨 ↑ */
-    .js-plotly-plot .gtitle { font-size: 15px !important; }
-    .js-plotly-plot .xtick text,
-    .js-plotly-plot .ytick text { font-size: 12px !important; }
-    .js-plotly-plot .legend text { font-size: 12px !important; }
-    .js-plotly-plot, .plotly-graph-div { width: 100% !important; }
-    /* 헤더 위 여백 정리 */
-    .main .block-container > div:first-child h1 { margin-bottom: 0.4rem !important; }
-  }
-
-  /* ====================================================================
-     DESKTOP GUARD (≥ 1500px) — 940px 디자인 보존 (Build 2.4)
-     --------------------------------------------------------------------
-     기존 `.main .block-container` 규칙이 Streamlit 최신 빌드의
-     `[data-testid="stMain"] .block-container` 를 잡지 못해 데스크톱에서도
-     스타일이 새던 문제 보강. PC 모니터에서는 940px 디자인 그대로.
-     padding 도 함께 재선언 — 본 GLOBAL_CSS 상단의 .main .block-container
-     규칙이 modern selector 를 못 잡으면 padding 까지 누락되기 때문.
-     하한이 1500px 인 이유: Tab S10+ 같은 큰 태블릿(~1450px)을 태블릿 분기로
-     끌어와 한글 클리핑/폰트 작음 문제를 잡기 위함.
-     -------------------------------------------------------------------- */
-  @media (min-width: 1500px) {
-    [data-testid="stMain"] .block-container,
-    section.main > div.block-container {
-      max-width: 940px !important;
-      padding-left: 1.5rem !important;
-      padding-right: 1.5rem !important;
-      padding-top: 0.1rem !important;
-    }
-  }
 </style>
 """
 
 
 def apply_theme():
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+
+# ==============================================================================
+#  디자인 토큰 — 인라인 hex 신규 도입 금지. 새 색이 필요하면 여기에 추가.
+# ==============================================================================
+
+COLOR_TEXT_PRIMARY   = "#1a1a18"
+COLOR_TEXT_SECONDARY = "#5f5e5a"
+COLOR_TEXT_TERTIARY  = "#7f7f7f"
+COLOR_TEXT_INFO      = "#185fa5"
+COLOR_BG_SECONDARY   = "#f5f5f3"
+COLOR_BG_INFO        = "#e6f1fb"
+COLOR_BORDER_INFO    = "#85b7eb"
+COLOR_SUCCESS        = "#1d9e75"
+COLOR_DANGER         = "#e24b4a"
+# 사용자 요청 2026-05-09 (Plotly literal hex 정리): CSS 변수와 1:1
+COLOR_ACCENT_DARKRED = "#C00000"   # PALETTE_ACCENT[4] alias
+COLOR_ACCENT_BLUE_2  = "#305496"   # PALETTE_ACCENT[3] alias
+COLOR_ACCENT_BLUE_3  = "#0a316e"
+COLOR_ACCENT_NAVY    = "#1F3A5F"   # ri_dual_zone 클러스터·이용량 라벨
+COLOR_QUALITY_MAX    = "#A50026"   # PALETTE_QUALITY_6TIER[5] alias
+
+COLOR_AWS = {
+    "제주":   "#378ADD",
+    "서귀포": "#1D9E75",
+    "성산":   "#E24B4A",
+    "고산":   "#BA7517",
+}
+
+COLOR_REGION = {
+    "동부": "#E24B4A",
+    "서부": "#BA7517",
+    "남부": "#1D9E75",
+    "북부": "#378ADD",
+}
+
+REGION_OF_WATERSHED = {
+    # config.WATERSHEDS 16개 유역 ↔ 4개 권역 매핑. 추가/변경 시 양쪽 동기화 필수.
+    "구좌": "동부", "성산": "동부", "표선": "동부",
+    "대정": "서부", "한경": "서부", "한림": "서부",
+    "애월": "서부",                        # 2026-05-28 추가 — 제주시 서부 (config WATERSHEDS L169)
+    "남원": "남부", "동서귀": "남부", "중서귀": "남부", "서서귀": "남부",
+    "안덕": "남부",                        # 2026-05-28 추가 — 서귀포시 서부 → 남부 (config L175)
+    "동제주": "북부", "중제주": "북부", "서제주": "북부", "조천": "북부",
+}
+
+REGION_REPRESENTATIVE_AWS = {
+    "동부": "성산", "서부": "고산", "남부": "서귀포", "북부": "제주",
+}
+
+PERIOD_ALPHA = {"M-2": 0.35, "M-1": 0.65, "M": 1.0}
+
+PALETTE_QUALITY_6TIER = [
+    "#2C7BB6", "#67A9CF", "#A6D96A", "#FEE08B", "#F46D43", "#A50026",
+]
+
+PALETTE_ACCENT = [
+    "#185fa5",  # 강조 파랑 (활성탭, 헤더)
+    "#1d9e75",  # 양수/증가
+    "#e24b4a",  # 음수/감소
+    "#305496",  # 보조 파랑
+    "#C00000",  # 다크레드 (변동 마커)
+]
+
+
+def standard_layout(
+    height: int = 280,
+    *,
+    margin_t: int = 10,
+    margin_b: int = 20,
+    margin_l: int = 50,
+    margin_r: int = 10,
+    font_size: int = 14,
+    showlegend: bool = False,
+) -> dict:
+    """Plotly figure 표준 layout dict.
+
+    사용:
+        fig.update_layout(**theme.standard_layout(height=240))
+
+    탭마다 다른 마진/폰트를 박지 말고 이 함수를 사용. 정말 다른 값이 필요하면
+    keyword arg 로 override.
+    """
+    return dict(
+        height=height,
+        margin=dict(t=margin_t, b=margin_b, l=margin_l, r=margin_r),
+        font=dict(size=font_size, color=COLOR_TEXT_PRIMARY),
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+        showlegend=showlegend,
+    )
 
 
 def hex_alpha(hex_col: str, alpha: float) -> str:
@@ -585,15 +392,13 @@ def hex_alpha(hex_col: str, alpha: float) -> str:
 def render_stat_card(label: str, value: str, sub: str = "",
                      color: str = None, container=None) -> None:
     border_color = color if color else "transparent"
-    # class="stat-card" 는 태블릿 분기에서 value 영역을 18px 로 키우는 훅.
-    # tab7/tab8 의 인라인 KPI 카드(22px)는 이 클래스가 없어 영향받지 않음.
     html = (
-        f'<div class="stat-card" style="background:#f5f5f3;border-radius:8px;'
+        f'<div style="background:#f5f5f3;border-radius:8px;'
         f'padding:0.75rem 0.875rem;border-left:2px solid {border_color};'
         f'margin-bottom:8px;">'
-        f'<div style="font-size:10.5px;color:#5f5e5a;font-weight:500;">{label}</div>'
-        f'<div style="font-size:16px;font-weight:600;color:#1a1a18;margin-top:2px;">{value}</div>'
-        f'<div style="font-size:10px;color:#5f5e5a;margin-top:2px;">{sub}</div>'
+        f'<div style="font-size:14px;color:#5f5e5a;font-weight:500;">{label}</div>'
+        f'<div style="font-size:20px;font-weight:600;color:#1a1a18;margin-top:2px;">{value}</div>'
+        f'<div style="font-size:14px;color:#5f5e5a;margin-top:2px;">{sub}</div>'
         f'</div>'
     )
     target = container if container else st
@@ -608,33 +413,106 @@ def render_period_badges(periods: dict, current_key: str = "M") -> str:
         p = periods[key]
         if key == current_key:
             style = ("background:#185fa5;color:#fff;border:0.5px solid #185fa5;"
-                     "padding:3px 10px;border-radius:14px;font-size:11px;"
+                     "padding:3px 10px;border-radius:14px;font-size:13px;"
                      "font-weight:500;margin-right:4px;display:inline-flex;"
                      "flex-direction:column;align-items:center;gap:1px;")
         else:
             style = ("background:#e6f1fb;color:#185fa5;border:0.5px solid #85b7eb;"
-                     "padding:3px 10px;border-radius:14px;font-size:11px;"
+                     "padding:3px 10px;border-radius:14px;font-size:13px;"
                      "font-weight:500;margin-right:4px;display:inline-flex;"
                      "flex-direction:column;align-items:center;gap:1px;")
         badges.append(
             f'<span style="{style}">'
-            f'<span style="font-size:11px;">{p["label"]}</span>'
-            f'<span style="font-size:11px;font-weight:600;">{key}</span>'
+            f'<span style="font-size:13px;">{p["label"]}</span>'
+            f'<span style="font-size:13px;font-weight:600;">{key}</span>'
             f'</span>'
         )
     return " ".join(badges)
+
+
+def render_period_kpi_card(
+    title: str,
+    groups: list,
+    *,
+    accent: str = "#305496",
+    is_base: bool = True,
+    container=None,
+) -> None:
+    """⑧ 통계 요약 탭의 세로 누적 KPI 카드 패턴 (Build 2.2 검증된 디자인).
+
+    한 카드 안에 title(상단 헤더) + groups(여러 개 KPI 그룹) 가 세로로 쌓이고,
+    그룹 사이는 0.5px dashed 구분선. 그룹 하나는 (label, value, sub) 3줄 구조.
+
+    Parameters
+    ----------
+    title : str
+        카드 헤더 (예: "2025년" 또는 "2025-08").
+    groups : list of tuple[str, str, str]
+        [(label, value, sub), ...] — label 14px/600, value 18px/700/accent,
+        sub 12px/500. value/sub 안에 HTML 허용.
+    accent : str, optional
+        카드 좌측 보더·VALUE 색상. 기본 #305496 (농업용 관정 컨텍스트).
+    is_base : bool, optional
+        기준 기간(가장 진한 톤). True 면 배경 0.08 alpha, False 면 0.04 alpha.
+    container : streamlit container, optional
+        st.columns(...)[i] 같은 컨테이너에 렌더링하려면 전달. 미전달 시 st.
+
+    Example
+    -------
+    >>> theme.render_period_kpi_card(
+    ...     "2025년",
+    ...     [("총 이용량", "642,201,060 ㎥", "총 취수허가량 ..."),
+    ...      ("관정별 평균 일이용량", "311.7 ㎥/일", "관정별 중앙값 ...")],
+    ...     accent="#305496",
+    ...     is_base=True,
+    ... )
+    """
+    bg_tint = hex_alpha(accent, 0.08 if is_base else 0.04)
+    bord_tint = hex_alpha(accent, 0.25)
+    title_col = accent if is_base else COLOR_TEXT_SECONDARY
+
+    # title 이 빈 문자열이면 헤더 영역 자체를 그리지 않음 (tab8 KPI 카드 같이
+    # 카드 상단 헤더가 필요 없는 사용처용).
+    parts: list = []
+    if title:
+        parts.append(
+            f'<div style="font-size:18px;font-weight:700;color:{title_col};'
+            f'padding:2px 0 4px;line-height:1.2;">{title}</div>'
+        )
+    for label, value, sub in groups:
+        parts.append(
+            f'<div style="padding:6px 0 4px;border-top:0.5px dashed {bord_tint};">'
+            f'<div style="font-size:17px;color:{COLOR_TEXT_PRIMARY};'
+            f'font-weight:600;line-height:1.15;margin:0;">{label}</div>'
+            f'<div style="font-size:21px;font-weight:700;color:{accent};'
+            f'line-height:1.15;margin:2px 0 0;">{value}</div>'
+            f'<div style="font-size:15px;color:{COLOR_TEXT_SECONDARY};'
+            f'font-weight:500;line-height:1.3;margin:1px 0 0;">{sub}</div>'
+            f'</div>'
+        )
+
+    card_html = (
+        f'<div style="background:{bg_tint};border-radius:8px;'
+        f'padding:0.55rem 0.9rem 0.7rem;border-left:3px solid {accent};'
+        f'margin-bottom:8px;">'
+        + "".join(parts)
+        + f'</div>'
+    )
+    target = container if container else st
+    target.markdown(card_html, unsafe_allow_html=True)
 
 
 def render_note_box(text: str) -> None:
     html = (
         f'<div style="margin-top:1rem;background:#f5f5f3;border-radius:8px;'
         f'padding:0.7rem 1rem;border-left:2px solid rgba(26,26,24,0.3);'
-        f'font-size:11px;color:#5f5e5a;line-height:1.6;">{text}</div>'
+        f'font-size:14px;color:#5f5e5a;line-height:1.6;">{text}</div>'
     )
     st.markdown(html, unsafe_allow_html=True)
 
 
 def format_diff_html(actual, avg, decimals: int = 1) -> str:
+    """기준값과의 편차 표시 HTML (색깔+부호). NaN/None 안전."""
     import pandas as pd
     if (actual is None or (isinstance(actual, float) and pd.isna(actual))
             or avg is None or (isinstance(avg, float) and pd.isna(avg))):
