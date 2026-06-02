@@ -1,59 +1,56 @@
 # ==============================================================================
-#  제주도 지하수위·강수량 분석 대시보드 - 필요 패키지 목록
+#  ?�주??지?�수?�·강?�량 분석 ?�?�보??- ?�요 ?�키지 목록
 # ------------------------------------------------------------------------------
-#  설치 방법 (VS Code 터미널에서):
+#  ?�치 방법 (VS Code ?��??�에??:
 #      pip install -r requirements.txt
 #
-#  버전 고정 표시:
-#      >=X.Y.Z  : X.Y.Z 이상 버전 허용 (권장)
-#      ==X.Y.Z  : 정확히 이 버전만 (호환성 문제 시 사용)
+#  버전 고정 ?�시:
+#      >=X.Y.Z  : X.Y.Z ?�상 버전 ?�용 (권장)
+#      ==X.Y.Z  : ?�확????버전�?(?�환??문제 ???�용)
 # ==============================================================================
 
-# --- 웹 대시보드 프레임워크 ---
-# 1.47.x 환경 검증 완료. 상한 <1.57 — 호환성 분석(2026-05-12) 결과 1.49~1.55
-# 까지의 변경이 우리 try/except 폴백 4곳을 깨지 않는 것으로 확인:
-#   - st.tabs(key=...) 정식 지원은 1.56+ (PR #14332). 1.55 까지 우리 TypeError 폴백 그대로.
-#   - st.rerun(scope="fragment") 는 1.37+ 부터 정식 — 변경 없음.
-#   - @st.fragment 도 1.37+ 부터 정식 — 변경 없음.
-#   - st.experimental_fragment 는 1.49 에서 제거되었으나 우리 코드 미사용.
-# 위험 영역: 1.50 의 widget "key as identity" 변경 — 새 환경에서 streamlit 실행
-# 시 widget 동작 검증 필요. 1.56+ 는 별도 세션에서 검증 후 결정 권장.
-streamlit>=1.47.1,<1.57
+# --- ???�?�보???�레?�워??---
+# 1.47.x ?�경 검�??�료. ?�한 <1.57 ???�환??분석(2026-05-12) 결과 1.49~1.55
+# 까�???변경이 ?�리 try/except ?�백 4곳을 깨�? ?�는 것으�??�인:
+#   - st.tabs(key=...) ?�식 지?��? 1.56+ (PR #14332). 1.55 까�? ?�리 TypeError ?�백 그�?�?
+#   - st.rerun(scope="fragment") ??1.37+ 부???�식 ??변�??�음.
+#   - @st.fragment ??1.37+ 부???�식 ??변�??�음.
+#   - st.experimental_fragment ??1.49 ?�서 ?�거?�었?�나 ?�리 코드 미사??
+# ?�험 ?�역: 1.50 ??widget "key as identity" 변�??????�경?�서 streamlit ?�행
+# ??widget ?�작 검�??�요. 1.56+ ??별도 ?�션?�서 검�???결정 권장.
+streamlit==1.47.1
 
-# --- 데이터 처리 ---
+# --- ?�이??처리 ---
 pandas>=2.0.0
 numpy>=1.24.0
-pyarrow>=15.0.0      # parquet 통합 캐시 (data/GWlevel/gwlevel_day.parquet) — 첫 로드 ~5배 단축
+pyarrow>=15.0.0      # parquet ?�합 캐시 (data/GWlevel/gwlevel_day.parquet) ??�?로드 ~5�??�축
 
-# --- 인터랙티브 차트 (기존 Chart.js를 대체) ---
+# --- ?�터?�티�?차트 (기존 Chart.js�??��? ---
 plotly>=5.18.0
 
-# --- HTTP 통신 (기상청 API 호출) ---
+# --- HTTP ?�신 (기상�?API ?�출) ---
 requests>=2.31.0
 
-# --- 엑셀 파일 읽기 ---
-openpyxl>=3.1.0      # .xlsx 파일용 (JD관측망 정보 파일)
-xlrd>=2.0.1          # .xls 파일용 (JD하모2.xls 같은 지하수위 원본)
+# --- ?��? ?�일 ?�기 ---
+openpyxl>=3.1.0      # .xlsx ?�일??(JD관측망 ?�보 ?�일)
+xlrd>=2.0.1          # .xls ?�일??(JD?�모2.xls 같�? 지?�수???�본)
 
-# --- 환경변수 관리 (.env 파일 읽기) ---
+# --- ?�경변??관�?(.env ?�일 ?�기) ---
 python-dotenv>=1.0.0
 
-# --- 진행률 표시 (터미널에서 다운로드 진행바) ---
+# --- 진행�??�시 (?��??�에???�운로드 진행�? ---
 tqdm>=4.66.0
 
-# --- 시설재배 빌드 전용 (scripts/build_greenhouse_stats.py) — Build 2026-05-30 ---
-# 환경공간정보서비스(EGIS) WFS GeoJSON 폴리곤 → 면적·읍면동 분해 → CSV
-# 대시보드 런타임에는 불필요. pip install 시 GDAL 등 시스템 의존성 자동 해결됨.
+# --- ?�설?�배 빌드 ?�용 (scripts/build_greenhouse_stats.py) ??Build 2026-05-30 ---
+# ?�경공간?�보?�비??EGIS) WFS GeoJSON ?�리�???면적·?�면??분해 ??CSV
+# ?�?�보???��??�에??불필?? pip install ??GDAL ???�스???�존???�동 ?�결??
 geopandas>=0.14.0
 pyogrio>=0.7.0
 
-# --- 지도 (V-World / OSM) ---  Build 1.2.01
+# --- 지??(V-World / OSM) ---  Build 1.2.01
 folium>=0.20.0
 streamlit-folium>=0.27.0
-lxml>=4.9.0          # 지하수위 일자료 HTML(.xls) 파싱용
-pyproj>=3.6.0        # TM좌표 → WGS84 변환
-
+lxml>=4.9.0          # 지?�수???�자�?HTML(.xls) ?�싱??pyproj>=3.6.0        # TM좌표 ??WGS84 변??
 # --- V6 dual-zone 그림 (tab10) ---  Build 2.0
-matplotlib>=3.8.0    # st.pyplot 으로 V6 figure 임베드
-squarify>=0.4.4      # treemap packing (그림 24·26·27)
-koreanize-matplotlib>=0.1.1  # matplotlib 한글 폰트 자동 적용
+matplotlib>=3.8.0    # st.pyplot ?�로 V6 figure ?�베??squarify>=0.4.4      # treemap packing (그림 24·26·27)
+koreanize-matplotlib>=0.1.1  # matplotlib ?��? ?�트 ?�동 ?�용
