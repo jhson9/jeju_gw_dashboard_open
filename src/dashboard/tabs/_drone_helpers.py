@@ -38,6 +38,54 @@ from src.drone.registry import Mission
 # 라 메모리 부담 수용 가능. preview.py 의 default 2048 은 변경 안 함 (다른 잠재 호출처 격리).
 DRONE_PREVIEW_HD_MAX_SIDE = 8192
 
+
+# ──────────────────────────────────────────────────────────────────
+#  Cloud 환경 감지 — pdf_server (:8766 localhost) 미접근 가드 (2026-06-02)
+# ------------------------------------------------------------------
+#  pdf_server 는 PDF_SERVER_HOST="127.0.0.1" 로 listen — Streamlit Cloud
+#  같은 외부 호스팅 환경에서는 브라우저(원격 사용자)가 127.0.0.1 로 접속 시
+#  본인 PC 의 8766 을 보러 가므로 "연결을 거부했습니다" 오류 발생.
+#  tab33/34/35 의 Cesium iframe 은 본질적으로 localhost same-origin 전제이므로
+#  Cloud 환경에서는 iframe 렌더 대신 안내 메시지로 대체.
+#
+#  감지 전략 (우선순위):
+#    1) 환경 변수 STREAMLIT_RUNTIME_ENV=cloud (사용자 명시 override)
+#    2) Streamlit Cloud 가 자동 설정하는 환경 변수들:
+#       - HOSTNAME 에 'streamlit' 또는 'streamlit-cloud' 포함
+#       - HOME=/home/appuser 같은 컨테이너 흔적 + /mount/src 존재
+#    3) 그 외 → 로컬로 간주.
+# ──────────────────────────────────────────────────────────────────
+def is_cloud_env() -> bool:
+    """Streamlit Cloud (또는 유사 원격 호스팅) 환경 여부.
+
+    pdf_server 가 127.0.0.1:8766 에 묶여 있어 외부 사용자가 접근 불가능한
+    환경(=Cloud 배포) 에서 True. tab33/34/35 가 iframe 렌더 대신 안내문 출력.
+    """
+    import os
+    if os.environ.get("STREAMLIT_RUNTIME_ENV", "").lower() == "cloud":
+        return True
+    hostname = (os.environ.get("HOSTNAME") or "").lower()
+    if "streamlit" in hostname:
+        return True
+    # Streamlit Community Cloud 컨테이너 흔적
+    if os.environ.get("HOME") == "/home/appuser" and Path("/mount/src").exists():
+        return True
+    return False
+
+
+def render_cloud_unavailable_notice(tab_label: str, *, missing_feature: str) -> None:
+    """Cloud 환경에서 pdf_server 의존 탭의 대체 안내문."""
+    st.info(
+        f"### {tab_label} — 클라우드 환경 미지원\n\n"
+        f"**{missing_feature}** 기능은 데스크탑 환경(로컬 PC 의 pdf_server :8766) "
+        f"에서만 사용 가능합니다. 이 탭은 대용량 3D 모델 / 같은-origin Cesium "
+        f"Worker 가 필요해 Streamlit Cloud 같은 원격 호스팅에서는 표시할 수 없습니다.\n\n"
+        f"**대안:**\n"
+        f"- 31번 탭: 미션 메타 + 정사영상 미리보기 (Cloud 가능)\n"
+        f"- 32번 탭: 정사영상 위에 V-World 배경 (Cloud 가능)\n"
+        f"- 로컬 PC 에서 `streamlit run src/dashboard/app.py` 실행 시 자동 활성"
+    )
+
 # CesiumJS 로컬 번들 — 사용자가 별도 다운로드 후 배치 필요 (오프라인 운영).
 # tab33_drone_3d 에서 사용.
 CESIUM_BUNDLE_DIR = Path(__file__).resolve().parents[1] / "static" / "libs" / "cesium"

@@ -73,6 +73,8 @@ from src.dashboard.quit_helper import quit_button
 
 from src.dashboard.tabs._drone_helpers import (
     get_registry,
+    is_cloud_env,
+    render_cloud_unavailable_notice,
     url_for_diff_viewer_3d,
 )
 
@@ -89,6 +91,14 @@ def render() -> None:
         )
     with _q:
         quit_button("quit_in_tab35")
+
+    # Cloud 환경 가드 — pdf_server :8766 localhost-only (2026-06-02).
+    if is_cloud_env():
+        render_cloud_unavailable_notice(
+            "35.시계열 분석(3D)",
+            missing_feature="좌·우 분할 3D Tiles 동기화 뷰어 (diff_viewer_3d.html)",
+        )
+        return
 
     reg = get_registry()
     if len(reg) == 0:

@@ -19,7 +19,9 @@ from src.dashboard.tabs._drone_helpers import (
     CESIUM_BUNDLE_DIR,
     CESIUM_JS,
     get_registry,
+    is_cloud_env,
     mission_label,
+    render_cloud_unavailable_notice,
     url_for_3d_viewer,
     url_for_tileset,
 )
@@ -38,6 +40,16 @@ def render() -> None:
         )
     with _q:
         quit_button("quit_in_tab33")
+
+    # Cloud 환경 가드 — pdf_server :8766 localhost-only (2026-06-02).
+    # Streamlit Cloud 에서는 iframe 이 사용자 PC 의 127.0.0.1 을 보러 가
+    # "연결을 거부했습니다" 오류 발생 → 안내문으로 대체.
+    if is_cloud_env():
+        render_cloud_unavailable_notice(
+            "33.3D영상 분석",
+            missing_feature="Cesium 3D Tiles 뷰어 (b3dm)",
+        )
+        return
 
     reg = get_registry()
     if len(reg) == 0:

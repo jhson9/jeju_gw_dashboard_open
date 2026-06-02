@@ -289,16 +289,29 @@ def make_map(center: tuple[float, float] = (33.42, 126.55),
         show=False,
     ).add_to(m)
 
-    # V-World API key 미설정 환경의 최소 안전망 — 캐시 디렉토리가 비었거나
-    # 신규 배포 직후 사용자가 캐시 다운로드 전이라도 일단 지도가 뜨도록 OSM 추가.
-    # 정상 환경에서는 위 두 로컬 layer 만 노출되고 OSM 은 LayerControl 에서 보이지만
-    # default 가 V-World 일반이라 사용자가 의식적으로 전환하지 않으면 활성화 안 됨.
+    # V-World 로컬 캐시가 배포 환경(Streamlit Cloud) 에 없거나 zoom 범위를
+    # 벗어나면 베이스 지도가 회색으로 비어 보이는 회귀 사례 (2026-06-02
+    # 사용자 보고 — tab11/12/13 회색). 다중 안전망:
+    #   1) V-World API direct (키 있으면) — 캐시 미배포 환경에서도 자동 대체.
+    #   2) OSM 폴백 — V-World API 도 실패할 때 최후 보루.
     key = (config.VWORLD_API_KEY or "").strip()
-    if not key:
+    if key:
+        # V-World API direct (zoom 8~19) — overlay=True 로 캐시 위에 자동 합성.
+        # 캐시 타일이 정상이면 같은 픽셀이 덮여 시각 차이 없음, 404 면 노출됨.
         folium.TileLayer(
-            "OpenStreetMap", name="일반지도 (OSM)",
-            overlay=False, control=True
+            tiles=f"https://api.vworld.kr/req/wmts/1.0.0/{key}/Base/{{z}}/{{y}}/{{x}}.png",
+            attr="ⓒ V-World", name="V-World 일반 (HD 폴백)",
+            overlay=True, control=True,
+            min_zoom=8, max_zoom=19, show=True,
         ).add_to(m)
+    # OSM 폴백 — V-World 가 모두 실패해도 배경이 보이도록.
+    # · 키 없는 환경: show=True (첫 진입부터 OSM 노출, 이전 동작 유지)
+    # · 키 있는 환경: show=False (LayerControl 에서 토글 가능, 회색 회피용 비상망)
+    folium.TileLayer(
+        "OpenStreetMap", name="일반지도 (OSM 폴백)",
+        overlay=False, control=True,
+        show=not key,
+    ).add_to(m)
 
     # 요청 3: 위·아래 펼쳐지지 않고 접힌 상태로 유지 → 클릭 시에만 목록 노출
     folium.LayerControl(collapsed=True, position="topright").add_to(m)
