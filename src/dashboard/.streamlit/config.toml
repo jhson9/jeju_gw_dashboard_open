@@ -1,27 +1,14 @@
-# ==============================================================================
-#  파일명: src/dashboard/.streamlit/config.toml
-#  Streamlit 서버 설정 — Cloud + 로컬 dev 공용.
-# ==============================================================================
 [server]
 maxUploadSize = 2000
+port = 8501
 headless = true
-
-# 2026-06-02 v5: runOnSave 비활성 (Cloud inotify 충돌 회피).
-runOnSave = false
-
-# 2026-06-02 v5: address = "127.0.0.1" 라인 제거.
-#   Cloud entrypoint 가 0.0.0.0 으로 띄우는데 우리 config 가 127.0.0.1 로 덮으면
-#   Cloud reverse-proxy 가 외부에서 접근 못해 health-check 503 발생 가능.
-#   로컬 dev 환경의 보안 효과는 streamlit run --server.address 127.0.0.1 로 대체.
-#   port = 8501 도 제거 — Cloud 가 자체 port 사용, 로컬 dev 는 기본 8501.
-
-# 2026-06-02 v4: enableStaticServing 명시 = true (1.47.1 기본 false).
-# 미설정 시 Cloud /app/static/drone_assets/... /app/static/drone_viewer/...
-# URL 작동 안 함 → 32탭 정사영상 안 보임 + 34탭 iframe 무한 로딩.
-enableStaticServing = true
-
-# 1GB hard limit 은 streamlit/bootstrap.py:35 의 하드코드 상수. 우회 불가.
-# 대용량 PDF 는 src/dashboard/pdf_server.py (port 8766, localhost) 가 서빙.
+runOnSave = true
+# localhost only — Network/External URL 표시 차단. LAN/외부 노출 위험 0.
+# pdf_server (8766) 도 127.0.0.1 라 일관성 유지.
+address = "127.0.0.1"
+# enableStaticServing 미설정 — 부모 config 의 true 가 그대로 적용.
+# 1GB hard limit 은 streamlit/bootstrap.py:35 의 하드코드 상수라 우회 불가.
+# 대용량 PDF 는 src/dashboard/pdf_server.py (port 8766) 가 서빙.
 
 [logger]
 level = "warning"
