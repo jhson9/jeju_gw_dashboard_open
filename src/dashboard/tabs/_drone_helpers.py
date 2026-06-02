@@ -167,15 +167,7 @@ def check_mission_bbox_fast(mission_dir):
 
 
 def drone_url_base() -> str:
-    """드론 자료 URL base.
-
-    - 로컬 dev: pdf_server :8766 의 drone 화이트리스트
-    - Streamlit Cloud (2026-06-02 fix): GitHub LFS raw URL.
-      data/04_drone/ 안 PNG/TIF 등은 LFS 로 push 되어 raw URL 로 자동 redirect.
-      ImageOverlay (Leaflet) 와 정사영상 미리보기 등에서 cross-origin 으로 fetch.
-    """
-    if is_cloud_env():
-        return "https://github.com/jhson9/jeju_gw_dashboard_open/raw/main/data/04_drone"
+    """pdf_server :8766 의 drone 화이트리스트 URL base."""
     src = pdf_server.DATA_SOURCES.get("drone")
     if src is None:
         return ""
@@ -215,17 +207,10 @@ def url_for_diff_viewer(left: Mission, right: Mission,
         host_8501:   Streamlit static 의 V-World 로컬 캐시 URL base
                      (브라우저가 cross-origin image 로 fetch — CORS 무관)
     """
-    # 2026-06-02 fix: Cloud 환경에서는 pdf_server :8766 도달 불가 →
-    # Streamlit static 의 drone_viewer/ 폴더 사용 (same-origin).
-    # diff_viewer.html 안에서 fetch 하는 정사영상 URL 은 hash 에 담겨
-    # 자동으로 drone_url_base() 분기를 따라 GitHub raw URL 이 됨.
-    if is_cloud_env():
-        base = "/app/static/drone_viewer/diff_viewer.html"
-    else:
-        src = pdf_server.DATA_SOURCES.get("drone_viewer")
-        if src is None:
-            return ""
-        base = f"{pdf_server.PDF_SERVER_URL_BASE}{src.url_prefix}diff_viewer.html"
+    src = pdf_server.DATA_SOURCES.get("drone_viewer")
+    if src is None:
+        return ""
+    base = f"{pdf_server.PDF_SERVER_URL_BASE}{src.url_prefix}diff_viewer.html"
 
     def bounds_str(m: Mission) -> str:
         bb = m.bbox_wgs84   # [lon_min, lat_min, lon_max, lat_max]
