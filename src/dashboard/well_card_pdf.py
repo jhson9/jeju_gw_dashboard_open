@@ -51,9 +51,28 @@ INDEX_PATH       = PDF_DATA_DIR / "index.json"
 #   * Streamlit Cloud: pdf_server 는 사용자 브라우저에서 도달 불가 (localhost-only).
 #                       대신 GitHub LFS raw URL 로 직접 fetch.
 # DATA_SOURCES dict 는 로컬 경로 동기화의 단일 진실 원천으로 그대로 유지.
+# 2026-06-02 V1.0.7: _drone_helpers 제거 → 자체 is_cloud_env 정의 (의존 끊음).
+def _is_cloud_env() -> bool:
+    """Streamlit Cloud 환경 여부 — _drone_helpers 와 동일 로직.
+
+    pdf_server (127.0.0.1:8766) 는 localhost only 라 Cloud 사용자가 접근 못함.
+    Cloud 면 GitHub raw URL, 로컬이면 pdf_server URL 사용.
+    """
+    import os
+    if Path("/mount/src").exists():
+        return True
+    if os.environ.get("STREAMLIT_RUNTIME_ENV", "").lower() == "cloud":
+        return True
+    hostname = (os.environ.get("HOSTNAME") or "").lower()
+    if "streamlit" in hostname:
+        return True
+    home = os.environ.get("HOME", "")
+    if home in ("/home/appuser", "/home/adminuser") and Path("/mount").exists():
+        return True
+    return False
+
 try:
-    from src.dashboard.tabs._drone_helpers import is_cloud_env
-    _IN_CLOUD = is_cloud_env()
+    _IN_CLOUD = _is_cloud_env()
 except Exception:  # noqa: BLE001
     _IN_CLOUD = False
 
