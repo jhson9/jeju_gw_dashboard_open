@@ -105,48 +105,6 @@ DATA_SOURCES: dict[str, PdfDataSource] = {
         allowed_ext=(".pdf",),
         label="시추 주상도",
     ),
-    # ── 드론 영상 (Build 2.0, 2026-05-23) — tab31 ──────────────────────────
-    # DJI Terra 산출물: 정사사진 다운샘플 PNG, 3D Tiles tileset.json + b3dm,
-    # DSM(GeoTIFF — 직접 서빙은 안 하지만 미래 확장 대비), PLY 포인트클라우드.
-    # data_drone/ 폴더 안 한글 미션명도 URL quote 로 안전 전달.
-    "drone": PdfDataSource(
-        name="drone",
-        data_root=config.DRONE_DATA_ROOT,
-        allowed_ext=(".png", ".jpg", ".json", ".b3dm", ".ply"),
-        label="드론 자료",
-    ),
-    # ── CesiumJS 라이브러리 번들 (Build 2.0, 2026-05-23 추가) — tab33 ──
-    # Streamlit 의 AppStaticFileHandler 가 .js/.css 를 강제로 text/plain 으로
-    # 응답하여 브라우저 strict MIME 검사가 JS 실행 거부 → "Cesium is not defined"
-    # → 검은 화면. Streamlit 의 의도적 보안 화이트리스트라 우회 어려움.
-    # pdf_server 는 우리가 직접 만든 핸들러라 MIME 을 정확히 제어 가능 — 여기로
-    # 우회 서빙. 번들 파일은 그대로 src/dashboard/static/libs/cesium/ 위치 유지
-    # (1GB 한도 모니터 [[project-drone-cesium-bundle-path]] 정책 유지).
-    "cesium_lib": PdfDataSource(
-        name="cesium_lib",
-        data_root=PROJECT_ROOT / "src" / "dashboard" / "static" / "libs" / "cesium",
-        # Cesium 번들 안의 모든 정적 자원 확장자.
-        allowed_ext=(
-            ".js", ".css", ".wasm",
-            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg",
-            ".json", ".xml", ".txt",
-            ".glb", ".gltf", ".bin",
-            ".ktx2", ".ktx", ".crn",
-            ".woff", ".woff2", ".ttf", ".otf",
-        ),
-        label="CesiumJS",
-    ),
-    # ── 드론 3D 뷰어 HTML 페이지 (Build 2.1, 2026-05-24 추가) — tab33 ──
-    # CesiumJS 뷰어 HTML 을 cesium_lib·drone 과 "같은 origin(8766)" 에서 서빙해
-    # srcdoc/cross-origin worker 문제를 원천 제거(Draco worker 정상화).
-    # 정적 HTML 1장(viewer3d.html)만 두고, 미션별 파라미터는 URL hash 로 전달.
-    # 메모리 [[project-drone-purpose]] — 드론 시설물 관리·시계열 변화 감지용.
-    "drone_viewer": PdfDataSource(
-        name="drone_viewer",
-        data_root=PROJECT_ROOT / "src" / "dashboard" / "static" / "drone_viewer",
-        allowed_ext=(".html", ".js", ".css"),
-        label="드론 3D 뷰어",
-    ),
     # 향후 추가 예: PROJECT_ROOT / "data_water_quality_report" 등
 }
 
