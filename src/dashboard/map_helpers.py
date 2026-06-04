@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pandas as pd
 import folium
+from folium.plugins import LocateControl
 import streamlit as st
 from branca.element import MacroElement
 from jinja2 import Template
@@ -260,6 +261,23 @@ def make_map(center: tuple[float, float] = (33.42, 126.55),
     # 커스텀 스케일 + 마커/스케일 CSS 일괄 주입
     m.get_root().header.add_child(folium.Element(_MAP_CSS))
     m.add_child(_MetricScale())
+
+    # ── GPS 현재 위치 버튼 (V1.0.8, 2026-06-02) ────────────────────────────
+    # 모바일 (S23, 태블릿) 에서 📍 버튼 클릭 → navigator.geolocation → 현재
+    # 위치 마커 + 자동 panTo. 데스크탑도 작동 (HTTPS 필수, Cloud 자동).
+    # 사용자가 권한 한 번만 허용하면 됨. 11/12/13 탭에서 자동 활성.
+    LocateControl(
+        position="topleft",
+        strings={"title": "현재 위치 표시"},
+        flyTo=True,                  # 위치 받으면 자동 panTo + zoom
+        keepCurrentZoomLevel=False,  # GPS 위치에 맞게 zoom 조정
+        drawCircle=True,             # 정확도 원 표시
+        showPopup=False,             # 위치 정보 팝업 안 띄움 (지도 깔끔)
+        locateOptions={
+            "enableHighAccuracy": True,   # GPS 정확도 우선 (모바일)
+            "maxZoom": 18,                # 너무 크게 zoom 안 되게
+        },
+    ).add_to(m)
 
     # ── 로컬 캐시 타일 (Step 2 사전 다운로드, 2026-05-14) ─────────────────
     # src/dashboard/static/map_tiles/{Layer}/{z}/{x}/{y}.{ext} — 제주 bbox
