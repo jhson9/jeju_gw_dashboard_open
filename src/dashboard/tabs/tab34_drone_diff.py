@@ -49,7 +49,7 @@ def render() -> None:
         st.markdown(
             '<p class="tab-title" style="margin:0;">34.시계열 분석(2D) '
             '<span style="font-size:0.55em;color:#888;font-weight:normal;">'
-            'V1.0.3 · 2026-06-02 14:30 KST</span></p>',
+            'V1.0.4 · 2026-06-02 15:30 KST</span></p>',
             unsafe_allow_html=True,
         )
     with _q:

@@ -199,47 +199,17 @@ def check_mission_bbox_fast(mission_dir):
     return _check_mission_bbox_cached(str(mission_dir), _result_tif_signature(mission_dir))
 
 
-# ──────────────────────────────────────────────────────────────────
-#  2026-06-02 V1.0.2: Cloud 한글 폴더명 회피용 ASCII slug 매핑
-# ------------------------------------------------------------------
-#  Streamlit Cloud static handler 가 percent-encoded 한글 경로를
-#  잘못 디코드하는 알려진 버그 (#11396) 회피. Cloud 환경에서만 mission_id
-#  를 ASCII slug 로 변환해 /app/static/drone_assets_v2/<ascii>/... URL 생성.
-#  로컬 dev (pdf_server) 는 원래 한글 mission_id 그대로 사용.
-#
-#  drone_assets_v2/ 폴더는 다운샘플(2048px, ~5MB) 된 preview.png 보관:
-#    2505_구좌덕천저수조 → mission_gjdc_2505
-#    2605_구좌덕천저수조 → mission_gjdc_2605
-#    2605_구좌세화저수조 → mission_gjsh_2605
-# ──────────────────────────────────────────────────────────────────
-_ASCII_SLUG_MAP = {
-    "2505_구좌덕천저수조": "mission_gjdc_2505",
-    "2605_구좌덕천저수조": "mission_gjdc_2605",
-    "2605_구좌세화저수조": "mission_gjsh_2605",
-}
-
-
-def _ascii_mission_id(mission_id: str) -> str:
-    """Cloud 환경에서만 한글 mission_id → ASCII slug 변환.
-
-    로컬 dev (pdf_server) 는 원본 mission_id 그대로 사용 — 자료가 한글 폴더에
-    그대로 있고 pdf_server 는 한글 경로 정상 처리.
-    """
-    if not is_cloud_env():
-        return mission_id
-    return _ASCII_SLUG_MAP.get(mission_id, mission_id)
-
-
 def drone_url_base() -> str:
     """드론 자료 URL base.
 
     - 로컬 dev: pdf_server :8766 의 drone 화이트리스트
-    - Streamlit Cloud (V1.0.2): /app/static/drone_assets_v2 (same-origin).
-      다운샘플(2048px, ~5MB)된 preview.png 가 src/dashboard/static/drone_assets_v2/
-      <ascii_slug>/derived/preview.png 에 있음. 한글 폴더명 회피 + 95MB 부담 해소.
+    - Streamlit Cloud (2026-06-02 v3 fix): /app/static/drone_assets (same-origin).
+      pre-rendered preview.png / dsm_heatmap.png 가 src/dashboard/static/drone_assets/
+      안에 있음 (일반 git 파일, LFS 미적용 — 100MB 제한 안).
+      GitHub LFS raw URL 은 anonymous fetch 시 403 (allowlist) 차단되어 사용 불가.
     """
     if is_cloud_env():
-        return "/app/static/drone_assets_v2"
+        return "/app/static/drone_assets"
     src = pdf_server.DATA_SOURCES.get("drone")
     if src is None:
         return ""
@@ -425,11 +395,11 @@ def url_for_3d_viewer(tileset_url: str, lat: float, lon: float,
 
 
 def url_for_preview(m: Mission) -> str:
-    return make_drone_url(drone_url_base(), _ascii_mission_id(m.id), "derived/preview.png")
+    return make_drone_url(drone_url_base(), m.id, "derived/preview.png")
 
 
 def url_for_dsm_heatmap(m: Mission) -> str:
-    return make_drone_url(drone_url_base(), _ascii_mission_id(m.id), "derived/dsm_heatmap.png")
+    return make_drone_url(drone_url_base(), m.id, "derived/dsm_heatmap.png")
 
 
 def tile_url_template_for(m: Mission) -> str:
@@ -442,15 +412,15 @@ def tile_url_template_for(m: Mission) -> str:
     Leaflet 의 `{z}/{x}/{y}` placeholder 는 보존 — Leaflet 이 런타임에 치환.
     """
     base = drone_url_base()
-    # V1.0.2: Cloud 환경에서는 _ascii_mission_id 로 매핑 (한글 회피).
-    # 로컬은 한글 그대로 — pdf_server 가 한글 경로 정상 처리.
-    encoded_base = make_drone_url(base, _ascii_mission_id(m.id), "map")
+    # mission.id 의 한글은 make_drone_url 안에서 URL quote 됨.
+    # 그 뒤 /map/{z}/{x}/{y}.png 는 placeholder 라 quote 안 함.
+    encoded_base = make_drone_url(base, m.id, "map")
     return f"{encoded_base}/{{z}}/{{x}}/{{y}}.png"
 
 
 def url_for_tileset(m: Mission) -> str:
     rel = (m.outputs.get("tiles_3d") or {}).get("tileset") or "models/pc/0/terra_b3dms/tileset.json"
-    return make_drone_url(drone_url_base(), _ascii_mission_id(m.id), rel)
+    return make_drone_url(drone_url_base(), m.id, rel)
 
 
 def zoom_for_bbox(bbox: tuple[float, float, float, float]) -> int:
