@@ -1,4 +1,0 @@
-﻿site_id,site_name,site_type,eup_myeon_dong,lon,lat,mission_id,flight_date,rtk_mode,image_count,rmse_m,has_2d,has_3d,has_dsm,has_ply,gsd_cm,memo
-2505,구좌 덕천리 저수조,저수조,구좌읍 덕천리,126.737457,33.474883,2505_구좌덕천저수조,2025-05,Single,143,0.298,1,1,1,1,2.31,RMSE 0.3m 양호
-deokcheon_reservoir,구좌 덕천 저수조,저수조,구좌읍 덕천리,126.737341,33.475121,2605_구좌덕천저수조,2026-05,Fix 100%,173,0.215,1,1,1,Y,3.37,2505 재측량 비교용
-sehwa_reservoir,구좌 세화 저수조,저수조,구좌읍 세화리,126.826226,33.470260,2605_구좌세화저수조,2026-05,Fix 100%,950,0.356,1,1,1,Y,1.52,신규 취득 — 저고도 정밀

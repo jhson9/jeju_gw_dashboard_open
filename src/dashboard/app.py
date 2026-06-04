@@ -170,13 +170,7 @@ from src.dashboard.tabs import (
     tab23_ag_usage_map,
     tab21_ag_stats,
     tab22_ag_usage_detail,
-    # ── 드론영상 그룹 (31~35) — 2026-05-23 tab31_drone_viewer 분할 ──
-    # tab31_drone_overview,  # ── M3 lazy: import 시점을 with tabs[N]: 블록 안으로 이동
-    # tab32_drone_2d,  # ── M3 lazy: import 시점을 with tabs[N]: 블록 안으로 이동
-    # tab33_drone_3d,  # ── M3 lazy: import 시점을 with tabs[N]: 블록 안으로 이동
-    # tab34_drone_diff,  # ── M3 lazy: import 시점을 with tabs[N]: 블록 안으로 이동
-    # tab35_drone_diff_3d,  # ── M3 lazy: import 시점을 with tabs[N]: 블록 안으로 이동
-    # ── 농업통계 그룹 (41~50) — 2026-05-25 ──
+    # ── 농업통계 그룹 (41~50) ──
     tab41_population,
     tab42_farm_household,
     tab43_greenhouse,
@@ -615,13 +609,6 @@ tab_names = [
     "21.이용량 통계",
     "22.이용량 경향분석",
     "23.이용량 공간분석",
-    # ── 드론영상 그룹 (31~35) ──
-    "31.드론영상 현황",
-    "32.정사영상 분석",
-    "33.3D영상 분석",
-    "34.시계열 분석(2D)",
-    "35.시계열 분석(3D)",
-    # ── 관리 (그룹 외) ──
     # ── 농업통계 그룹 (41~50) ──
     "41.농가현황",
     "42.농경지현황",
@@ -881,82 +868,17 @@ with tabs[10]:
     # 23. 이용량 공간분석 (구 ⑧-2, 행정구역 choropleth)
     tab23_ag_usage_map.render()
 
-with tabs[11]:
-    # 31.드론영상 현황
-    # D2+D3 fix 2026-05-30: lazy import + try/except 격리 + alias 제거.
-    # 이 탭 fail 해도 다른 탭(tab32~99) 동반 다운 차단 — 사용자 보고 8팀 권고.
-    try:
-        from src.dashboard.tabs import tab31_drone_overview
-        tab31_drone_overview.render()
-    except Exception as e:  # noqa: BLE001
-        import traceback as _tb
-        st.error(f"❌ 31.드론영상 현황 로드 실패: {type(e).__name__}: {e}")
-        with st.expander("상세 traceback (운영자용)"):
-            st.code(_tb.format_exc(), language="python")
-
-with tabs[12]:
-    # 32.정사영상 분석
-    # D2+D3 fix 2026-05-30: lazy import + try/except 격리 + alias 제거.
-    # 이 탭 fail 해도 다른 탭(tab32~99) 동반 다운 차단 — 사용자 보고 8팀 권고.
-    try:
-        from src.dashboard.tabs import tab32_drone_2d
-        tab32_drone_2d.render()
-    except Exception as e:  # noqa: BLE001
-        import traceback as _tb
-        st.error(f"❌ 32.정사영상 분석 로드 실패: {type(e).__name__}: {e}")
-        with st.expander("상세 traceback (운영자용)"):
-            st.code(_tb.format_exc(), language="python")
-
-with tabs[13]:
-    # 33.3D영상 분석
-    # D2+D3 fix 2026-05-30: lazy import + try/except 격리 + alias 제거.
-    # 이 탭 fail 해도 다른 탭(tab32~99) 동반 다운 차단 — 사용자 보고 8팀 권고.
-    try:
-        from src.dashboard.tabs import tab33_drone_3d
-        tab33_drone_3d.render()
-    except Exception as e:  # noqa: BLE001
-        import traceback as _tb
-        st.error(f"❌ 33.3D영상 분석 로드 실패: {type(e).__name__}: {e}")
-        with st.expander("상세 traceback (운영자용)"):
-            st.code(_tb.format_exc(), language="python")
-
-with tabs[14]:
-    # 34.시계열 분석(2D)
-    # D2+D3 fix 2026-05-30: lazy import + try/except 격리 + alias 제거.
-    # 이 탭 fail 해도 다른 탭(tab32~99) 동반 다운 차단 — 사용자 보고 8팀 권고.
-    try:
-        from src.dashboard.tabs import tab34_drone_diff
-        tab34_drone_diff.render()
-    except Exception as e:  # noqa: BLE001
-        import traceback as _tb
-        st.error(f"❌ 34.시계열 분석(2D) 로드 실패: {type(e).__name__}: {e}")
-        with st.expander("상세 traceback (운영자용)"):
-            st.code(_tb.format_exc(), language="python")
-
-with tabs[15]:
-    # 35.시계열 분석(3D)
-    # D2+D3 fix 2026-05-30: lazy import + try/except 격리 + alias 제거.
-    # 이 탭 fail 해도 다른 탭(tab32~99) 동반 다운 차단 — 사용자 보고 8팀 권고.
-    try:
-        from src.dashboard.tabs import tab35_drone_diff_3d
-        tab35_drone_diff_3d.render()
-    except Exception as e:  # noqa: BLE001
-        import traceback as _tb
-        st.error(f"❌ 35.시계열 분석(3D) 로드 실패: {type(e).__name__}: {e}")
-        with st.expander("상세 traceback (운영자용)"):
-            st.code(_tb.format_exc(), language="python")
-
 # ── 농업통계 그룹 (41~50) — 2026-05-25 ──
-with tabs[16]:
+with tabs[11]:
     tab41_population.render()
 
-with tabs[17]:
+with tabs[12]:
     tab42_farm_household.render()
 
-with tabs[18]:
+with tabs[13]:
     tab43_greenhouse.render()
 
-with tabs[19]:
+with tabs[14]:
     # 외부 공개판: tab99_admin (관리자 데이터 관리) 비활성
     try:
         from src.dashboard.tabs import tab99_admin
