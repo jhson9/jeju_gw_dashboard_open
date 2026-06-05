@@ -13,5 +13,6 @@ folium>=0.20.0
 lxml>=4.9.0
 pyproj>=3.6.0
 matplotlib>=3.8.0
+squarify>=0.4.4
 koreanize-matplotlib>=0.1.1
 shapely>=2.0.0
