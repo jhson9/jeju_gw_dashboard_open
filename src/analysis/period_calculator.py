@@ -82,7 +82,8 @@ def _last_day_of_month(year: int, month: int) -> int:
 # ==============================================================================
 #  ■ 메인 함수: 기간 계산
 # ==============================================================================
-def compute_periods(base_date: Optional[date] = None) -> dict:
+def compute_periods(base_date: Optional[date] = None,
+                    partial_month: bool = False) -> dict:
     """
     기준일에 따라 M-2·M-1·M 기간을 계산합니다.
 
@@ -90,29 +91,39 @@ def compute_periods(base_date: Optional[date] = None) -> dict:
     ----------
     base_date : date, optional
         기준일. 기본값은 오늘.
+    partial_month : bool, default False
+        🆕 (2026-06-06) True 이고 base_date.day >= 2 이면:
+          · M-2, M-1 = 기존 월 단위
+          · M        = 이번달 1일 ~ (base_date - 1일)  [D-1 부분월]
+        False (기본) 이면 기존 full/half 분기 그대로.
+
+        ※ 본 옵션은 tab03/04/05 의 "최근 D-1 일별 분석" 용 비파괴 확장.
+          기존 호출부(tab01/02 등)는 영향 없음.
 
     Returns
     -------
     dict
         {
           "base_date": date,          # 기준일
-          "mode": "full" or "half",   # 전체월 또는 반월
-          "M":   {...},               # 현재 기간
+          "mode": "full"/"half"/"partial",   # 🆕 partial 모드 추가
+          "M":   {...},               # 현재 기간 (partial 시 부분월)
           "M-1": {...},               # 한 기간 전
           "M-2": {...},               # 두 기간 전
         }
 
         각 기간 dict 구조:
         {
-          "year": int,           # 연도
-          "month": int,          # 월
-          "half": bool,          # 반월(1~15일)인가?
-          "label": str,          # 예: "2026년 4월", "2026년 4월(1~15)"
-          "short_label": str,    # 예: "2026-04", "2026-04(1-15)"
-          "start_date": date,    # 기간 시작일
-          "end_date": date,      # 기간 종료일
-          "coefficient": float,  # 직전평균에 곱할 계수 (반월=0.5, 전체월=1.0)
-          "baseline_years": list # 비교 기준 연도 (직전 N년)
+          "year": int,
+          "month": int,
+          "half": bool,
+          "partial": bool,       # 🆕 부분월(1~D-1) 인가?
+          "n_days": int,         # 🆕 기간 일수 (full=28~31, half=15, partial=1~30)
+          "label": str,          # 예: "2026년 4월", "2026년 6월(1~5)"
+          "short_label": str,
+          "start_date": date,
+          "end_date": date,
+          "coefficient": float,  # 반월=0.5, 전체월/부분월=1.0
+          "baseline_years_*": list
         }
     """
     if base_date is None:
@@ -122,6 +133,23 @@ def compute_periods(base_date: Optional[date] = None) -> dict:
             base_date = datetime.now(_KST).date()
         else:
             base_date = date.today()
+
+    # 🆕 (2026-06-06) partial_month 모드 — M 슬롯만 부분월
+    #   tab03/04/05 가 D-1 일별 분석을 할 때 이 모드 사용.
+    #   base_date.day == 1 이면 어제(D-1)가 전월 말일이므로 partial 의미 없음 — 기존 모드로.
+    if partial_month and base_date.day >= 2:
+        mode = "partial"
+        m_y, m_m = base_date.year, base_date.month
+        m_period = _build_period_partial(m_y, m_m, base_date)
+        m1_y, m1_m = _shift_months(m_y, m_m, -1)
+        m2_y, m2_m = _shift_months(m_y, m_m, -2)
+        return {
+            "base_date": base_date,
+            "mode": mode,
+            "M":   m_period,
+            "M-1": _build_period_info(m1_y, m1_m, half=False),
+            "M-2": _build_period_info(m2_y, m2_m, half=False),
+        }
 
     if base_date.day <= config.HALF_MONTH_BOUNDARY_DAY:
         # === 모드 1: 전월 모드 (기준일 1~15일) ===
@@ -157,12 +185,15 @@ def _build_period_info(year: int, month: int, half: bool) -> dict:
         label = f"{year}년 {month}월(1~15)"
         short = f"{year}-{month:02d}(1-15)"
         coefficient = config.HALF_MONTH_M_COEFFICIENT  # 반월=0.5
+        n_days = 15
     else:
         start = date(year, month, 1)
-        end = date(year, month, _last_day_of_month(year, month))
+        last = _last_day_of_month(year, month)
+        end = date(year, month, last)
         label = f"{year}년 {month}월"
         short = f"{year}-{month:02d}"
         coefficient = 1.0
+        n_days = last
 
     # 비교 기준 연도: 해당 기간의 연도에서 직전 N년
     # 예) 2026년 2월의 직전 5년 = [2021, 2022, 2023, 2024, 2025]
@@ -177,11 +208,58 @@ def _build_period_info(year: int, month: int, half: bool) -> dict:
         "year": year,
         "month": month,
         "half": half,
+        "partial": False,   # 🆕 (2026-06-06) 부분월 분기용 키 — full/half 는 False
+        "n_days": n_days,   # 🆕 기간 일수
         "label": label,
         "short_label": short,
         "start_date": start,
         "end_date": end,
         "coefficient": coefficient,
+        "baseline_years_rainfall": baseline_years_rain,
+        "baseline_years_gwlevel": baseline_years_gw,
+    }
+
+
+def _build_period_partial(year: int, month: int, base_date: date) -> dict:
+    """🆕 (2026-06-06) 부분월 정보 빌더 — M 슬롯 1~D-1 일별 분석용.
+
+    Parameters
+    ----------
+    year, month : 해당 부분월의 연·월 (= base_date 의 연·월)
+    base_date   : 분석 기준일 (오늘 또는 사용자 선택)
+
+    Returns
+    -------
+    dict : period_info schema 와 동일하되 partial=True, end_date = base_date - 1일.
+
+    예) base_date=2026-06-06 → start=2026-06-01, end=2026-06-05 (5일치).
+    """
+    start = date(year, month, 1)
+    end = base_date - timedelta(days=1)
+    n_days = (end - start).days + 1
+    # 🆕 (2026-06-06 v3 사용자 요청) 라벨 단축 — 글자 길이 줄임
+    # 🆕 (2026-06-06 v4 사용자 요청) short_label 에도 "일" 명시 — "(~5)" → "(~5일)"
+    label = f"{year}년 {month}월(~{end.day}일, N={n_days}일)"
+    short = f"{year}-{month:02d}(~{end.day}일)"
+
+    baseline_years_rain = list(range(
+        year - config.RAINFALL_BASELINE_YEARS, year
+    ))
+    baseline_years_gw = list(range(
+        year - config.GWLEVEL_BASELINE_YEARS, year
+    ))
+
+    return {
+        "year": year,
+        "month": month,
+        "half": False,
+        "partial": True,    # 🆕 부분월 마커 — 호출부가 일별 분기
+        "n_days": n_days,   # 1~30 사이
+        "label": label,
+        "short_label": short,
+        "start_date": start,
+        "end_date": end,
+        "coefficient": 1.0,  # 부분월은 별도 단위 환산 안 함 (일별 표시)
         "baseline_years_rainfall": baseline_years_rain,
         "baseline_years_gwlevel": baseline_years_gw,
     }
@@ -248,7 +326,12 @@ def filter_baseline_period(df, date_column: str, period: dict,
     month = period["month"]
     dt_col = pd.to_datetime(df[date_column])
 
-    if period["half"]:
+    if period.get("partial"):
+        # 🆕 (2026-06-06) 부분월 — 같은 일수 윈도(1일 ~ end.day) 로 비교
+        start = date(year, month, 1)
+        end_day = min(period["end_date"].day, _last_day_of_month(year, month))
+        end = date(year, month, end_day)
+    elif period["half"]:
         start = date(year, month, 1)
         end = date(year, month, 15)
     else:

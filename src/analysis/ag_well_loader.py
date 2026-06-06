@@ -179,7 +179,7 @@ def _normalize_master(df: pd.DataFrame) -> pd.DataFrame:
 # ------------------------------------------------------------------------------
 #  ■ master.csv
 # ------------------------------------------------------------------------------
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_master(active_only: bool = True) -> pd.DataFrame:
     """data_ag_well/master.csv 를 로드.
 
@@ -201,7 +201,7 @@ def load_master(active_only: bool = True) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_master_yearly(year: int) -> pd.DataFrame:
     """master_yearly/master_YYYY.csv 를 로드. 없으면 빈 DataFrame."""
     p = config.AG_MASTER_YEARLY_DIR / f"master_{year}.csv"
@@ -213,7 +213,7 @@ def load_master_yearly(year: int) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_master_yearly_all() -> pd.DataFrame:
     """master_yearly/ 의 모든 연도를 concat 해 반환 (변동 추적용).
 
@@ -248,7 +248,7 @@ _MONTH_MAP = {
 }
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_usage_long() -> pd.DataFrame:
     """usage/usage_montly_*.csv 9년치 → long format 통합.
 
@@ -330,7 +330,7 @@ def load_usage_long() -> pd.DataFrame:
 _QUALITY_NUMERIC_COLS = ("ammonia_n", "nitrate_n", "pH", "chloride", "EC")
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_quality_semiannual() -> pd.DataFrame:
     """반기 수질 5항목 long format. 부적합 플래그(*_exceed) 자동 추가."""
     p = config.AG_QUALITY_SEMIANNUAL
@@ -358,7 +358,7 @@ def load_quality_semiannual() -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-@st.cache_data(ttl=300, show_spinner=False, max_entries=4)
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
 def load_quality_regular() -> pd.DataFrame:
     """정기검사 15항목."""
     p = config.AG_QUALITY_REGULAR

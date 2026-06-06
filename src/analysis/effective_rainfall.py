@@ -161,11 +161,72 @@ def aggregate_half_monthly(asos_df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ==============================================================================
+#  ■ 2.5. 🆕 (2026-06-06) 부분월(1일~D-1) 집계
+#     사용자 요청: tab03/04/05 에서 M 슬롯을 "이번달 1일~어제" 일별 표시.
+#     base_date 가 6/6 이면 같은 월(6월) 의 1~5일만 집계.
+#     과거 N년 동기간 비교도 자동으로 — 동일 month, day <= (base_date.day-1) 필터.
+# ==============================================================================
+@st.cache_data(ttl=600, show_spinner=False, max_entries=8, hash_funcs={pd.DataFrame: id})
+def aggregate_partial_monthly(asos_df: pd.DataFrame, base_date) -> pd.DataFrame:
+    """🆕 (2026-06-06) 부분월 집계 — 같은 월의 1일~(base_date.day-1) 만.
+
+    Parameters
+    ----------
+    asos_df  : pd.DataFrame
+    base_date: datetime.date — 분석 기준일. 같은 월의 day < base_date.day 만 포함.
+
+    Returns
+    -------
+    pd.DataFrame
+        컬럼: 지점명, 연월, 월강수량(mm)_부분월, 유효강수일수(일)_부분월,
+              집계일수(일)_부분월
+        연월: 'YYYY-MM' (해당 월 전체 표기). 값은 1~(base_date.day-1) 합산.
+
+    동작 메모:
+    - base_date.day == 1 이면 빈 DataFrame 반환 (부분월 의미 없음).
+    - 과거 N년 동기간 비교용 데이터도 같이 들어감 (월 일치 + 일 ≤ end_day).
+      → get_baseline_average 가 partial_df 사용 시 곧바로 lookup.
+    """
+    cols = ["지점명", "연월", "월강수량(mm)_부분월",
+            "유효강수일수(일)_부분월", "집계일수(일)_부분월"]
+    if asos_df.empty or base_date is None or base_date.day < 2:
+        return pd.DataFrame(columns=cols)
+
+    target_month = base_date.month
+    end_day = base_date.day - 1   # D-1
+
+    df = asos_df.copy()
+    df["일시"] = pd.to_datetime(df["일시"], errors="coerce")
+    df = df.dropna(subset=["일시"])
+
+    # 같은 월의 1~end_day 만 (전 연도 일괄 — 과거 N년 동기간 lookup 용)
+    df = df[(df["일시"].dt.month == target_month)
+            & (df["일시"].dt.day <= end_day)].copy()
+    if df.empty:
+        return pd.DataFrame(columns=cols)
+
+    df["연월"] = df["일시"].dt.strftime("%Y-%m")
+    threshold = config.EFFECTIVE_RAINFALL_THRESHOLD_MM
+    df["유효강수일"] = (df["일강수량(mm)"] >= threshold).astype(int)
+
+    partial = df.groupby(["지점명", "연월"]).agg(
+        **{
+            "월강수량(mm)_부분월":   ("일강수량(mm)", lambda s: s.sum(min_count=1)),
+            "유효강수일수(일)_부분월": ("유효강수일", "sum"),
+            "집계일수(일)_부분월":   ("일강수량(mm)", "count"),
+        }
+    ).reset_index()
+    partial["월강수량(mm)_부분월"] = partial["월강수량(mm)_부분월"].round(1)
+    return partial
+
+
+# ==============================================================================
 #  ■ 3. 특정 기간·지점의 실측값 조회
 # ==============================================================================
 def get_period_value(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
                      period: dict, station: str,
-                     metric: str = "월강수량(mm)") -> float | None:
+                     metric: str = "월강수량(mm)",
+                     partial_df: pd.DataFrame = None) -> float | None:
     """
     기간 정보 dict 에 해당하는 실측값을 조회.
 
@@ -190,9 +251,15 @@ def get_period_value(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
     year = period["year"]
     month = period["month"]
     is_half = period.get("half", False)
+    is_partial = period.get("partial", False)   # 🆕 (2026-06-06)
     ym_str = f"{year}-{month:02d}"
 
-    if is_half:
+    if is_partial and partial_df is not None and not partial_df.empty:
+        # 🆕 부분월(1~D-1) — partial_df 에서 조회
+        col = f"{metric}_부분월"
+        row = partial_df[(partial_df["지점명"] == station)
+                         & (partial_df["연월"] == ym_str)]
+    elif is_half:
         # 반월 집계에서 조회
         col = f"{metric}_반월"
         row = half_df[(half_df["지점명"] == station)
@@ -217,7 +284,8 @@ def get_period_value(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
 def get_baseline_average(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
                          period: dict, station: str,
                          metric: str = "월강수량(mm)",
-                         n_years: int = None) -> tuple[float | None, list[int]]:
+                         n_years: int = None,
+                         partial_df: pd.DataFrame = None) -> tuple[float | None, list[int]]:
     """
     지정 기간의 '직전 N년 동월' 평균을 계산.
 
@@ -247,6 +315,7 @@ def get_baseline_average(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
     year = period["year"]
     month = period["month"]
     is_half = period.get("half", False)
+    is_partial = period.get("partial", False)   # 🆕 (2026-06-06)
 
     # 직전 N년
     baseline_years = list(range(year - n_years, year))
@@ -256,7 +325,12 @@ def get_baseline_average(monthly_df: pd.DataFrame, half_df: pd.DataFrame,
 
     for y in baseline_years:
         ym = f"{y}-{month:02d}"
-        if is_half:
+        if is_partial and partial_df is not None and not partial_df.empty:
+            # 🆕 부분월 — 과거 N년 같은 (1일~D-1) 윈도와 비교
+            col = f"{metric}_부분월"
+            row = partial_df[(partial_df["지점명"] == station)
+                             & (partial_df["연월"] == ym)]
+        elif is_half:
             col = f"{metric}_반월"
             row = half_df[(half_df["지점명"] == station)
                           & (half_df["연월"] == ym)]

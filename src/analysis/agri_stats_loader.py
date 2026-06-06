@@ -79,6 +79,16 @@ def load_crop() -> pd.DataFrame:
     return _read("crop_cultivation_area.csv")
 
 
+@lru_cache(maxsize=1)
+def load_agrix() -> pd.DataFrame:
+    """AgriX 농업경영체 등록정보(시군별·연도별).
+    컬럼: 연도, 시군, 경영체수, 남, 여, 전업, 겸업, 고령자_65세이상, 재배면적_ha, 출처.
+    출처: https://uni.agrix.go.kr/docs7/biOlap/ (자료갱신 2026.3.17., 추출 2026.6.3.)
+    참고: 농업경영체수는 통계연보 농가수와 정의가 달라 직접 대체 불가 — 보조지표로 사용.
+    """
+    return _read("agrix_jeju_yearly.csv")
+
+
 def classify_to_geojson_name(sigun: str, eupmyeon: str):
     if not isinstance(eupmyeon, str):
         return None
@@ -145,7 +155,7 @@ def clear_caches() -> None:
     # 이전엔 보고서 캐시(load_report)가 누락되어 Tab99 "데이터 새로고침" 시에도
     # 보고서 CSV 변경이 반영되지 않았음. 9종 t19~t27 보고서 모두 영향.
     for fn in (load_meta, load_pop_eup, load_pop_yearly, load_farm_household,
-               load_farmland, load_farm_size, load_crop, load_report):
+               load_farmland, load_farm_size, load_crop, load_report, load_agrix):
         fn.cache_clear()
 
 
