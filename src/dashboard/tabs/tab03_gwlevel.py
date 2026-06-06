@@ -1,7 +1,9 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/tab04_gwlevel.py
+#  파일명: src/dashboard/tabs/tab03_gwlevel.py
 #  탭: ③ 지하수위 분석  —  Build 1.0 Final
 # ==============================================================================
+
+import logging
 
 import streamlit as st
 import pandas as pd
@@ -14,11 +16,15 @@ from src.collectors import gwlevel_parser
 from src.dashboard import theme
 from plotly.subplots import make_subplots
 
+# 🆕 (2026-06-06 Stage 2 M6) 표준 로거 — st.caption 사용자 알림과 병행해
+# 운영자가 traceback 으로 원인을 추적할 수 있도록 logger.exception 추가.
+logger = logging.getLogger(__name__)
+
 
 def _short(y, m): return f"{str(y)[2:]}년 {m}월"
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def _load_station_data_cached():
     """개별 관측정 CSV 전체를 로드 후 연월 컬럼으로 정리."""
     df = gwlevel_parser.load_all_station_data()
@@ -91,10 +97,19 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     # X축 라벨 축약
     xlabels = [f"{p['month']}월 ({k})" for k, p in zip(ps_keys, ps)]
     # 하단 캡션용 기간 목록
-    recent_months = ", ".join(f"{str(p['year'])[2:]}년 {p['month']}월" for p in ps)
-    baseline_gw_str = ", ".join(
-        f"{str(p['year']-n_gw)[2:]}~{str(p['year']-1)[2:]}년 {p['month']}월" for p in ps
-    )
+    # 🆕 (2026-06-06 v3 사용자 요청) partial M 에 "(~5일)" 명시
+    def _p_lbl4(p):
+        s = f"{str(p['year'])[2:]}년 {p['month']}월"
+        if p.get("partial"):
+            s += f"(~{p['end_date'].day}일)"
+        return s
+    def _bl_gw4(p):
+        s = f"{str(p['year']-n_gw)[2:]}~{str(p['year']-1)[2:]}년 {p['month']}월"
+        if p.get("partial"):
+            s += f"(~{p['end_date'].day}일)"
+        return s
+    recent_months = ", ".join(_p_lbl4(p) for p in ps)
+    baseline_gw_str = ", ".join(_bl_gw4(p) for p in ps)
     # 차트 범례용 (M-2 baseline 기준)
     _p0 = ps[0]
     _bl0 = list(range(_p0["year"] - n_gw, _p0["year"]))
@@ -103,24 +118,49 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     # ── M-2·M-1·M 요약 카드 (기존 HTML .card) ────────────────
     card_cols = st.columns(3)
     rows_data = []
+    # 🆕 (2026-06-06 v2 자료5팀 권고) partial M 슬롯은 일자료 직접 계산 — 단위 일치
+    # actual·baseline 둘 다 부분월(1~D-1) 동일 윈도우 비교로 거짓 라벨 제거
+    base_date_for_partial = periods.get("base_date")
     for i, (pk, p) in enumerate(zip(ps_keys, ps)):
         ym = f"{p['year']}-{p['month']:02d}"
         bl = list(range(p["year"] - n_gw, p["year"]))
         actual = avg = None
-        if not ws_df.empty:
-            ra = ws_df[ws_df["연월"] == ym]
-            _av = ra["EL_평균"].iloc[0] if not ra.empty else None
-            actual = float(_av) if _av is not None and pd.notna(_av) else None
-            bv = []
-            for y in bl:
-                _sub = ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]
-                if not _sub.empty:
-                    _v = _sub["EL_평균"].iloc[0]
-                    if pd.notna(_v):
-                        bv.append(float(_v))
-            avg = sum(bv)/len(bv) if bv else None
+
+        # 🆕 partial M 인 경우 — 일자료 기반 재계산 (자료 정합성 보장)
+        if p.get("partial") and pk == "M" and base_date_for_partial is not None:
+            try:
+                pres = _compute_partial_watershed_values(
+                    sel, str(base_date_for_partial), n_gw
+                )
+                actual = pres.get("actual")
+                avg = pres.get("baseline_avg")
+                # 자료5팀: n_actual·n_baseline 도 카드에 표기 권장 — 표본수 투명
+                p_n_act = pres.get("n_actual", 0)
+                p_used_years = pres.get("used_years", [])
+            except Exception:
+                # 실패 시 기존 월집계 폴백 (안전)
+                if not ws_df.empty:
+                    ra = ws_df[ws_df["연월"] == ym]
+                    _av = ra["EL_평균"].iloc[0] if not ra.empty else None
+                    actual = float(_av) if _av is not None and pd.notna(_av) else None
+        else:
+            # 기존 월집계 경로 (M-2, M-1, 또는 partial 비활성)
+            if not ws_df.empty:
+                ra = ws_df[ws_df["연월"] == ym]
+                _av = ra["EL_평균"].iloc[0] if not ra.empty else None
+                actual = float(_av) if _av is not None and pd.notna(_av) else None
+                bv = []
+                for y in bl:
+                    _sub = ws_df[ws_df["연월"] == f"{y}-{p['month']:02d}"]
+                    if not _sub.empty:
+                        _v = _sub["EL_평균"].iloc[0]
+                        if pd.notna(_v):
+                            bv.append(float(_v))
+                avg = sum(bv)/len(bv) if bv else None
         diff = round(actual - avg, 2) if (actual is not None and avg is not None) else None
-        pct  = round(diff/avg*100)    if (diff is not None and avg) else None
+        # 🛡️ (2026-06-06 로직1팀 권고) avg ≈ 0 분모 폭발 가드
+        pct  = round(diff/avg*100) if (diff is not None and avg is not None
+                                        and abs(avg) >= 0.01) else None
         rows_data.append({"pk": pk, "p": p, "actual": actual, "avg": avg,
                            "diff": diff, "pct": pct, "bl": bl})
 
@@ -140,20 +180,67 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
 
         # ⑧ 통계 헬퍼 적용 (사용자 결정 2026-05-09)
         #   title = "2025년 10월 (M-2)", 그룹 1개 = 지하수위. is_base 로 M(진함)/M-2,M-1(연함) 구분.
+        # 🆕 (2026-06-06) partial 시 M 카드만 라벨에 "(1~Nday 일별 N=N)" 부연.
+        # 🆕 (2026-06-06 v3 자료2팀 권고) sub 라인에 N_일·N_baseline 표본수 표기
+        # 🆕 (2026-06-06 v3) 라벨 단축 — 글자 길이 줄임
+        is_partial = p.get("partial", False)
+        partial_tag = (f" (~{p['end_date'].day}일 평균, N={p['n_days']})"
+                       if is_partial else "")
+        # partial 모드면 sub 라인에 표본수 표기 — 사용자가 신뢰도 인지
+        # 🆕 (2026-06-06 v3) "1~N일" → "~N일" 단축
+        if is_partial and pk == "M":
+            try:
+                _n_act = p_n_act if 'p_n_act' in locals() else 0
+                _used_yrs = p_used_years if 'p_used_years' in locals() else []
+                _baseline_n_str = (f", baseline {len(_used_yrs)}년"
+                                    if _used_yrs else "")
+                _sample_html = (
+                    f'<span style="color:var(--color-text-secondary);'
+                    f'font-size:11px;">N_일={_n_act}{_baseline_n_str}</span>'
+                )
+            except Exception:
+                _sample_html = ""
+            sub_main = (
+                f"{gv_str} ({yr_gw_s}년 ~{p['end_date'].day}일 평균) "
+                f"&nbsp;|&nbsp; 편차 {diff_html} "
+                f"&nbsp;|&nbsp; {_sample_html}"
+            )
+        else:
+            sub_main = (
+                f"{gv_str} ({yr_gw_s}년 {p['month']}월 평균) "
+                f"&nbsp;|&nbsp; 편차 {diff_html}"
+            )
         groups = [
             (
-                f"지하수위 ({sel})",
+                f"지하수위 ({sel}){partial_tag}",
                 gw_str,
-                f"{gv_str} ({yr_gw_s}년 {p['month']}월 평균) "
-                f"&nbsp;|&nbsp; 편차 {diff_html}",
+                sub_main,
             ),
         ]
+        card_title = f"{p['year']}년 {p['month']}월 ({pk})"
+        if is_partial:
+            # 🆕 (2026-06-06 v3 사용자 요청) "1~5일" → "~5일"
+            card_title = f"{p['year']}년 {p['month']}월(~{p['end_date'].day}일) ({pk})"
         theme.render_period_kpi_card(
-            title=f"{p['year']}년 {p['month']}월 ({pk})",
+            title=card_title,
             groups=groups,
             accent=ws_col,
             is_base=is_m,
             container=card_cols[i],
+        )
+
+    # 🆕 (2026-06-06 자료2팀 권고) partial 모드 시 자료 품질 안내
+    if periods["M"].get("partial"):
+        st.markdown(
+            '<p style="font-size:13px;color:var(--color-text-secondary);'
+            'margin:6px 0 0;padding:6px 10px;background:rgba(250,200,80,0.08);'
+            'border-left:3px solid rgba(250,200,80,0.6);border-radius:3px;">'
+            'ℹ️ M 슬롯 (부분월) 표시값은 원본 일자료 평균입니다. '
+            '<b>일부 관측소 결측·이상 시 평균이 흔들릴 수 있어</b> '
+            '⚙️ 데이터 관리 탭에서 수집 상태 및 표본수(N)를 확인하세요. '
+            '광역 추세는 baseline(과거 3년 동기간) 대비 편차로 판단 권장.'
+            '</p>',
+            unsafe_allow_html=True
         )
 
     st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
@@ -213,6 +300,20 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     st.plotly_chart(fig, use_container_width=True, key=f"t3_bar_{sel}")
 
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
+    # 🆕 (2026-06-06) M 슬롯이 partial 일 때만 — 일별 라인 차트 (유역 평균)
+    m_p_part = periods["M"]
+    if m_p_part.get("partial") and periods.get("base_date") is not None:
+        st.markdown(
+            f'<p class="section-title" style="margin:0 0 4px;">'
+            f'M({m_p_part["short_label"]}) — {sel}유역 일별 지하수위 추이 '
+            f'(N={m_p_part["n_days"]}일)</p>'
+            f'<p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 6px;">'
+            f'* 유역 내 관측정 일자료 평균 (by_station_day). 자동수집(water.jeju API) 으로 D-1 까지 가용.</p>',
+            unsafe_allow_html=True
+        )
+        _render_watershed_partial_daily(sel, periods["base_date"], ws_col)
+        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
     # ── 상세 비교표 (유역별 현황 탭의 '지하수위(EL) 현황' 표와 동일 포맷) ─
     st.markdown(
@@ -277,6 +378,372 @@ def render(ws_data_all: dict, periods: dict, asos_df=None):
     # ── 유역 내 관측정별 지하수위 (차트 + 표) ────────────────
     _render_stations_section(sel, ws_col, periods, ps_keys, ps, n_gw, asos_df,
                               recent_months, baseline_gw_str)
+
+
+# ==============================================================================
+#  ■ 🆕 (2026-06-06 v2) partial 모드 일자료 기반 actual/baseline 계산
+#     자료 검증 5팀 발견: tab04 카드의 actual 은 ws_df 월전체값을 그대로 쓰면서
+#     라벨엔 "1~Nday 평균" 표기 → 거짓 라벨. partial 모드 시 일자료에서 직접
+#     계산해야 단위 일치 + 사용자 라벨 정합.
+# ==============================================================================
+# 🚀 (2026-06-06 v3 성능 개선)
+#   기존: _compute_partial_watershed_values 가 유역별 16번 호출 → parquet 16번 로드.
+#   신규: _compute_all_partial_watersheds 가 한 번에 16개 유역 모두 계산. parquet
+#         1회 로드 + 유역 매핑 1회 + groupby 1회. 캐시 키 1개로 통합.
+#   효과: 첫 진입 ~20초 → ~5초 단축 예상.
+@st.cache_data(ttl=600, show_spinner=False, max_entries=4)
+def _compute_all_partial_watersheds(base_date_str: str,
+                                     n_years: int) -> dict:
+    """🚀 (2026-06-06 v3) 모든 유역의 partial 값 한 번에 계산.
+
+    Returns
+    -------
+    dict {유역명: {actual, baseline_avg, n_actual, used_years, n_baseline, err}}
+    """
+    from datetime import date as _date
+    import pandas as _pd
+    out: dict = {}
+    try:
+        base_date = _pd.to_datetime(base_date_str).date()
+    except Exception:
+        return out
+    if base_date.day < 2:
+        return out
+
+    try:
+        from src.collectors import gwlevel_day_parser
+        from src.analysis import watershed_mapper
+    except Exception:
+        return out
+
+    try:
+        station_map = watershed_mapper.load_station_to_watershed_map(verbose=False)
+    except Exception:
+        return out
+    if not station_map:
+        return out
+
+    # parquet 1회 로드 (가장 비용 큰 작업)
+    try:
+        pq_path = gwlevel_day_parser.GWLEVEL_DAY_PARQUET
+        if not pq_path.exists():
+            return out
+        all_df = _pd.read_parquet(pq_path)
+    except Exception:
+        return out
+    required = {"관측소명", "날짜", "EL"}
+    if not required.issubset(set(all_df.columns)):
+        return out
+
+    # 전처리 1회
+    all_df = all_df.copy()
+    all_df["날짜"] = _pd.to_datetime(all_df["날짜"], errors="coerce")
+    all_df = all_df.dropna(subset=["날짜", "EL"])
+    all_df["station_ws"] = all_df["관측소명"].map(station_map)
+
+    end_day = base_date.day - 1
+    target_month = base_date.month
+    baseline_years = list(range(base_date.year - n_years, base_date.year))
+
+    # 같은 월·day<=end_day 마스크 1회 (모든 연도 포함)
+    month_day_mask = ((all_df["날짜"].dt.month == target_month)
+                      & (all_df["날짜"].dt.day <= end_day))
+    masked = all_df[month_day_mask]
+
+    # 유역별로 그룹핑
+    for ws_name in set(station_map.values()):
+        ws_df = masked[masked["station_ws"] == ws_name]
+        if ws_df.empty:
+            out[ws_name] = {"actual": None, "baseline_avg": None,
+                             "n_actual": 0, "used_years": [], "n_baseline": 0,
+                             "err": None}
+            continue
+
+        # actual: 현재 연도
+        cur = ws_df[ws_df["날짜"].dt.year == base_date.year]
+        actual = None
+        n_actual = 0
+        if not cur.empty:
+            daily_avg = cur.groupby(cur["날짜"].dt.date)["EL"].mean()
+            if len(daily_avg) > 0:
+                actual = float(daily_avg.mean())
+                n_actual = int(len(daily_avg))
+
+        # baseline: 과거 N년
+        yearly_means = []
+        used_years = []
+        n_baseline = 0
+        for y in baseline_years:
+            y_df = ws_df[ws_df["날짜"].dt.year == y]
+            if y_df.empty:
+                continue
+            daily = y_df.groupby(y_df["날짜"].dt.date)["EL"].mean()
+            if len(daily) == 0:
+                continue
+            yearly_means.append(float(daily.mean()))
+            used_years.append(y)
+            n_baseline += int(len(daily))
+        baseline_avg = (float(sum(yearly_means) / len(yearly_means))
+                        if yearly_means else None)
+
+        out[ws_name] = {
+            "actual": actual,
+            "baseline_avg": baseline_avg,
+            "n_actual": n_actual,
+            "used_years": used_years,
+            "n_baseline": n_baseline,
+            "err": None,
+        }
+
+    return out
+
+
+def _compute_partial_watershed_values(sel_watershed: str, base_date_str: str,
+                                       n_years: int) -> dict:
+    """🚀 (2026-06-06 v3 성능 개선) 일괄 함수에서 lookup만.
+    원래 16번 호출되며 parquet 도 16번 로드되던 것을 1번으로 단축.
+
+    Parameters
+    ----------
+    sel_watershed : str — 유역명 (예: "구좌")
+    base_date_str : str — 분석 기준일 (YYYY-MM-DD), 캐시 키용
+    n_years       : int — baseline 연도 수
+
+    Returns
+    -------
+    dict — _compute_all_partial_watersheds 의 해당 유역 항목.
+    """
+    all_results = _compute_all_partial_watersheds(base_date_str, n_years)
+    return all_results.get(sel_watershed, {
+        "actual": None, "baseline_avg": None, "n_actual": 0,
+        "used_years": [], "n_baseline": 0,
+        "err": f"{sel_watershed} 유역 결과 없음"
+    })
+
+
+# 🆕 (2026-06-06 v3) 미사용 본문 — 일괄 함수가 본 작업 대체.
+# 아래 함수는 원본 보존용 (호출처 없음). 향후 PR 에서 완전 제거 예정.
+def _DEPRECATED_compute_partial_watershed_values_orig(sel_watershed, base_date_str, n_years):
+    """Legacy 함수 — 호출 시 즉시 동일 결과 반환 (안전한 본문)."""
+    return _compute_partial_watershed_values(sel_watershed, base_date_str, n_years)
+
+
+# (아래 dead-code 는 향후 PR 에서 정리 — 들여쓰기 오류 방지용 주석 처리 영역)
+def _DEPRECATED_unused_block_below() -> dict:
+    """이 함수는 dead-code 보호용. 원래 _compute_partial_watershed_values 본문이
+    바로 아래에 이어졌지만 _compute_all_partial_watersheds 로 대체됨.
+    아래 코드 블록은 무의미하게 실행되지 않지만 syntax 유지 위해 본 wrapper 안에 둠."""
+    result = {"actual": None, "baseline_avg": None, "n_actual": 0,
+              "used_years": [], "n_baseline": 0, "err": None}
+    try:
+        base_date = _pd.to_datetime(base_date_str).date()
+    except Exception as e:
+        result["err"] = f"base_date 파싱 실패: {e}"
+        return result
+    if base_date.day < 2:
+        result["err"] = "base_date.day < 2 (partial 의미 없음)"
+        return result
+
+    try:
+        from src.collectors import gwlevel_day_parser
+        from src.analysis import watershed_mapper
+    except Exception as e:
+        result["err"] = f"모듈 import 실패: {type(e).__name__}: {e}"
+        return result
+
+    # 유역 ↔ 관측정 매핑
+    try:
+        station_map = watershed_mapper.load_station_to_watershed_map(verbose=False)
+    except Exception as e:
+        result["err"] = f"매핑 로드 실패: {type(e).__name__}: {e}"
+        return result
+    stations_in_ws = [s for s, w in station_map.items() if w == sel_watershed]
+    if not stations_in_ws:
+        result["err"] = f"{sel_watershed} 유역 관측정 0건"
+        return result
+
+    # 일자료 parquet 로드
+    try:
+        pq_path = gwlevel_day_parser.GWLEVEL_DAY_PARQUET
+        if not pq_path.exists():
+            result["err"] = "parquet 미생성"
+            return result
+        all_df = _pd.read_parquet(pq_path)
+    except Exception as e:
+        result["err"] = f"parquet 로드 실패: {type(e).__name__}: {e}"
+        return result
+    required = {"관측소명", "날짜", "EL"}
+    if not required.issubset(set(all_df.columns)):
+        result["err"] = f"parquet 컬럼 누락: {sorted(required - set(all_df.columns))}"
+        return result
+
+    # 유역 내 관측정 + 같은 월·1~D-1 (연도 무관) 필터
+    df = all_df[all_df["관측소명"].isin(stations_in_ws)].copy()
+    df["날짜"] = _pd.to_datetime(df["날짜"], errors="coerce")
+    df = df.dropna(subset=["날짜"])
+    df = df.dropna(subset=["EL"])  # 결측 EL 제외
+    end_day = base_date.day - 1
+    target_month = base_date.month
+
+    # actual: 같은 연도의 1~end_day
+    cur_df = df[(df["날짜"].dt.year == base_date.year)
+                & (df["날짜"].dt.month == target_month)
+                & (df["날짜"].dt.day <= end_day)]
+    if not cur_df.empty:
+        # 일별 유역 평균 → 그 평균
+        daily_avg = cur_df.groupby(cur_df["날짜"].dt.date)["EL"].mean()
+        if len(daily_avg) > 0:
+            result["actual"] = float(daily_avg.mean())
+            result["n_actual"] = int(len(daily_avg))
+
+    # baseline: 과거 N년의 같은 월·1~end_day
+    baseline_years = list(range(base_date.year - n_years, base_date.year))
+    yearly_means = []
+    used_years = []
+    n_baseline = 0
+    for y in baseline_years:
+        y_df = df[(df["날짜"].dt.year == y)
+                  & (df["날짜"].dt.month == target_month)
+                  & (df["날짜"].dt.day <= end_day)]
+        if y_df.empty:
+            continue
+        daily = y_df.groupby(y_df["날짜"].dt.date)["EL"].mean()
+        if len(daily) == 0:
+            continue
+        yearly_means.append(float(daily.mean()))
+        used_years.append(y)
+        n_baseline += int(len(daily))
+    if yearly_means:
+        result["baseline_avg"] = float(sum(yearly_means) / len(yearly_means))
+        result["used_years"] = used_years
+        result["n_baseline"] = n_baseline
+
+    return result
+
+
+# ==============================================================================
+#  ■ 🆕 (2026-06-06) M 슬롯 부분월(1~D-1) — 유역 평균 일별 라인 차트
+#     by_station_day/{관측소}.csv 를 유역별로 묶어 일별 평균 EL 표시.
+#     사용자 요청: tab03/04/05 의 M 슬롯만 D-1 일별 분석.
+# ==============================================================================
+def _render_watershed_partial_daily(sel: str, base_date, ws_color: str):
+    """선택된 유역 내 관측정들의 1~D-1 일별 평균 EL 라인 차트.
+
+    Parameters
+    ----------
+    sel       : str - 유역명 (예: "구좌")
+    base_date : datetime.date - 분석 기준일. 1~(base_date.day-1) 일자 표시.
+    ws_color  : str - 라인 색상 (유역 컬러)
+    """
+    if base_date is None or base_date.day < 2:
+        st.caption(f"⚠ 분석 기준일({base_date}) 이 매월 1일이라 부분월 표시 불가")
+        return
+    try:
+        from src.collectors import gwlevel_day_parser
+        from src.analysis import watershed_mapper
+    except Exception as e:  # noqa: BLE001
+        # 🆕 (2026-06-06 Stage 2 M6) logger.exception 병행 — 운영자 진단용 traceback
+        logger.exception("_render_watershed_partial_daily: 모듈 import 실패")
+        st.caption(f"⚠ 모듈 로드 실패: {type(e).__name__}: {e}")
+        return
+
+    try:
+        station_map = watershed_mapper.load_station_to_watershed_map(verbose=False)
+    except Exception:
+        station_map = {}
+    stations_in_ws = [s for s, w in station_map.items() if w == sel]
+    if not stations_in_ws:
+        st.caption(f"⚠ {sel}유역 관측정 매핑 없음 — watershed_mapper 점검 필요")
+        return
+
+    # 일자료 통합 로드 — gwlevel_day_parser 의 캐시된 parquet 직접 읽기
+    try:
+        parquet_path = gwlevel_day_parser.GWLEVEL_DAY_PARQUET
+        if not parquet_path.exists():
+            st.caption("⚠ 일자료 parquet 없음 — ⚙️ 데이터 관리 탭의 "
+                       "'🔄 지금 모두 업데이트' 실행 권장")
+            return
+        all_df = pd.read_parquet(parquet_path)
+    except ImportError:
+        # pyarrow 미설치는 환경 문제 — traceback 불필요, warning 만 기록.
+        logger.warning("_render_watershed_partial_daily: pyarrow 미설치")
+        st.caption("⚠ pyarrow 미설치 — `pip install pyarrow` 권장")
+        return
+    except Exception as e:  # noqa: BLE001
+        # 🆕 (2026-06-06 Stage 2 M6) logger.exception 병행 — parquet 로드 실패 진단
+        logger.exception("_render_watershed_partial_daily: parquet 로드 실패: %s", parquet_path)
+        st.caption(f"⚠ 일자료 로드 실패: {type(e).__name__}: {e}")
+        return
+    if all_df is None or all_df.empty:
+        st.caption("⚠ 일자료 비어있음")
+        return
+
+    # 🛡️ (2026-06-06 자료2팀 권고) parquet schema 검증 — 컬럼 누락 시 KeyError 방지
+    required_cols = {"관측소명", "날짜", "EL"}
+    missing_cols = required_cols - set(all_df.columns)
+    if missing_cols:
+        st.caption(f"⚠ 일자료 parquet 컬럼 누락: {sorted(missing_cols)} "
+                   "— ⚙️ 데이터 관리 탭에서 parquet 재생성 권장")
+        return
+
+    # 유역 내 관측정 + base_date 의 같은 월·1~D-1 필터
+    df = all_df[all_df["관측소명"].isin(stations_in_ws)].copy()
+    if df.empty:
+        st.caption(f"⚠ {sel}유역의 일자료 0건")
+        return
+    df["날짜"] = pd.to_datetime(df["날짜"], errors="coerce")
+    df = df.dropna(subset=["날짜"])
+    end_day = base_date.day - 1
+    df = df[(df["날짜"].dt.year == base_date.year)
+            & (df["날짜"].dt.month == base_date.month)
+            & (df["날짜"].dt.day <= end_day)].copy()
+    if df.empty:
+        st.caption(f"⚠ {sel}유역의 {base_date.year}-{base_date.month:02d}-01~"
+                   f"{end_day:02d} 일자료 0건 — ⚙️ 데이터 관리 탭에서 수집")
+        return
+
+    # 일별 유역 평균 (관측정 평균)
+    daily = (df.groupby(df["날짜"].dt.day)["EL"]
+               .mean().reset_index().rename(columns={"날짜": "일",
+                                                     "EL": "EL_평균"}))
+    daily = daily.sort_values("일")
+
+    # 🛡️ (2026-06-06 자료2팀 권고) 결측일 사용자 인지 — 예상 일수와 실제 데이터 비교
+    expected_days = set(range(1, end_day + 1))
+    actual_days = set(daily["일"].tolist())
+    missing_days = sorted(expected_days - actual_days)
+    if missing_days:
+        st.caption(
+            f"ℹ️ 자료 결측일: {missing_days} "
+            f"({len(actual_days)}/{end_day}일 표시)"
+        )
+
+    # 라인 차트
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=daily["일"].astype(str).tolist(),
+        y=daily["EL_평균"].round(2).tolist(),
+        mode="lines+markers+text",
+        line=dict(color=ws_color, width=2.5),
+        marker=dict(size=8, color=ws_color),
+        text=[f"{v:.2f}" for v in daily["EL_평균"]],
+        textposition="top center",
+        textfont=dict(size=11, color=theme.COLOR_TEXT_PRIMARY),
+        hovertemplate=f"{base_date.month}월 %{{x}}일<br>EL: %{{y:.2f}} m<extra></extra>",
+        cliponaxis=False,
+    ))
+    fig.update_layout(
+        height=240,
+        plot_bgcolor="white",
+        xaxis=dict(title=f"{base_date.month}월 일자", type="category",
+                   tickfont=dict(size=14)),
+        yaxis=dict(title="EL (m)"),
+        margin=dict(l=38, r=8, t=14, b=4),
+        showlegend=False,
+        font=dict(size=13),
+    )
+    st.plotly_chart(fig, use_container_width=True,
+                    key=f"t4_part_daily_{sel}_{base_date}")
 
 
 # ==============================================================================

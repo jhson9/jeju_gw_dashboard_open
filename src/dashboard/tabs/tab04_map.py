@@ -1,5 +1,5 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/tab05_map.py
+#  파일명: src/dashboard/tabs/tab04_map.py
 #  탭: ④ 공간 분석 (관측정/AWS) — Build 1.2.02
 # ------------------------------------------------------------------------------
 #  v1.2.02 변경:
@@ -22,13 +22,13 @@ from streamlit_folium import st_folium
 import config
 from src.collectors import gwlevel_day_parser
 from src.dashboard import map_helpers, ag_well_helpers
-from src.dashboard.tabs._tab05_helpers import (
+from src.dashboard.tabs._tab04_helpers import (
     _diff_html,
     _smart_period_labels,
     _baseline_footnote,
 )
-from src.dashboard.tabs._tab05_aws import _render_aws_detail
-from src.dashboard.tabs._tab05_station import _render_station_detail
+from src.dashboard.tabs._tab04_aws import _render_aws_detail
+from src.dashboard.tabs._tab04_station import _render_station_detail
 
 
 # ==============================================================================
@@ -45,7 +45,7 @@ def _list_day_stations_cached() -> list[str]:
 
 
 # ==============================================================================
-#  ■ 색상/포맷 헬퍼 — _tab05_helpers.py 로 분리 (2026-05-09).
+#  ■ 색상/포맷 헬퍼 — _tab04_helpers.py 로 분리 (2026-05-09).
 #  _diff_html, _smart_period_labels, _baseline_footnote 는 위 import 에서 가져옴.
 # ==============================================================================
 
@@ -54,7 +54,7 @@ def _list_day_stations_cached() -> list[str]:
 #  ■ 메인 렌더 — render() 전체를 단일 @st.fragment 로 (Phase 3 P1).
 #    tab6/7/8 와 동일 패턴. 마커 클릭·selectbox·radio 변경 시 fragment-only
 #    rerun 으로 처리되어 흰 깜박임·탭 점프 차단.
-#    ※ st_folium 의 동적 key (`tab05_map_{mode}`) 는 mode 변경 시 iframe 을
+#    ※ st_folium 의 동적 key (`tab04_map_{mode}`) 는 mode 변경 시 iframe 을
 #      재마운트하지만 fragment 안에서도 동일 동작 — 위험 없음.
 # ==============================================================================
 @st.fragment
@@ -63,8 +63,8 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
     # lat 33.45 → 33.39 (실질 33.42 기준 -0.03, 약 3km 남쪽). v7 마이그레이션.
     _MIGRATION_KEY = "_tab5_zoom_migrated_v7"
     if not st.session_state.get(_MIGRATION_KEY):
-        st.session_state.pop("tab05_map_zoom", None)
-        st.session_state.pop("tab05_map_center", None)
+        st.session_state.pop("tab04_map_zoom", None)
+        st.session_state.pop("tab04_map_center", None)
         st.session_state[_MIGRATION_KEY] = True
 
     meta = _load_meta_cached()
@@ -80,6 +80,15 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
         st.warning("⚠️ data/GWlevel/by_station_day/ 에 일자료 CSV 가 없습니다. "
                    "process_gwlevel_day.py 또는 ⚙️ 데이터 탭에서 파싱을 실행하세요.")
         return
+
+    # 🆕 (2026-06-06) M 슬롯이 partial(D-1) 모드일 때 안내
+    m_p = periods.get("M", {})
+    if m_p.get("partial"):
+        st.caption(
+            f"📅 분석 기준일: **{base_date}** · "
+            f"M({m_p['short_label']}) = **{m_p['year']}년 {m_p['month']}월 1~{m_p['end_date'].day}일** "
+            f"(N={m_p['n_days']}일, water.jeju API 자동수집)"
+        )
 
     # ── 세션 상태 (위젯 key 와 동일하게 사용해 양방향 동기화 보장) ──
     aws_names_all = [s["name"] for s in config.STATIONS_ASOS]
@@ -174,8 +183,8 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
     # 일어나도 같은 줌/중심 유지되어야 마커 선택 작업이 끊기지 않음.
     # quantization (zoom→int, lat/lng→round 4) 으로 React props identity 가
     # 안정되어 streamlit-folium iframe 재렌더 차단.
-    _saved_center = st.session_state.get("tab05_map_center", (33.39, 126.55))
-    _saved_zoom = st.session_state.get("tab05_map_zoom", 11)
+    _saved_center = st.session_state.get("tab04_map_center", (33.39, 126.55))
+    _saved_zoom = st.session_state.get("tab04_map_zoom", 11)
 
     m = map_helpers.make_map(center=_saved_center, zoom=_saved_zoom)
     map_helpers.add_station_markers(m, meta, selected=cur_station)
@@ -186,7 +195,7 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
         m, width=None, height=800,
         # 사용자 요청 (2026-05-16 v15): zoom/center 제거 — 흰색 깜빡임 차단.
         returned_objects=["last_object_clicked_tooltip"],
-        key="tab05_map",
+        key="tab04_map",
     )
 
     # 사용자가 줌/이동한 결과를 session_state 에 보존 (quantization)
@@ -195,12 +204,12 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
         _c = st_data.get("center")
         if _z is not None:
             try:
-                st.session_state["tab05_map_zoom"] = round(float(_z) * 2) / 2
+                st.session_state["tab04_map_zoom"] = round(float(_z) * 2) / 2
             except (TypeError, ValueError):
                 pass
         if isinstance(_c, dict) and "lat" in _c and "lng" in _c:
             try:
-                st.session_state["tab05_map_center"] = (
+                st.session_state["tab04_map_center"] = (
                     round(float(_c["lat"]), 4),
                     round(float(_c["lng"]), 4),
                 )
@@ -240,6 +249,6 @@ def render(asos_df: pd.DataFrame, periods: dict, base_date: date):
 
 
 # ==============================================================================
-#  ■ 디테일 렌더 — _tab05_station.py / _tab05_aws.py 로 분리 (2026-05-09).
-#  ■ 12개월 차트/표 + 월별 통계 — _tab05_charts.py 로 분리.
+#  ■ 디테일 렌더 — _tab04_station.py / _tab04_aws.py 로 분리 (2026-05-09).
+#  ■ 12개월 차트/표 + 월별 통계 — _tab04_charts.py 로 분리.
 # ==============================================================================

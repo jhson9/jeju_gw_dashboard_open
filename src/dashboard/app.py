@@ -159,11 +159,10 @@ from src.analysis import period_calculator, watershed_mapper, effective_rainfall
 from src.dashboard import theme
 from src.dashboard.tabs import (
     tab01_overview,
-    tab02_watershed,
-    tab03_rainfall,
-    tab04_gwlevel,
+    tab02_rainfall,
+    tab03_gwlevel,
+    tab04_map,
     # tab99_admin,  # 외부 공개판: gitignore로 제외 (관리자 전용)
-    tab05_map,
     tab11_ag_search,
     tab12_ag_usage,
     tab13_ag_quality,
@@ -595,12 +594,13 @@ def _shutdown_and_exit() -> None:
 # 사용자 요청 (2026-05-23): 탭 번호 그룹 체계로 전면 재편 — 기상·지하수(01~05) /
 #   지하수시설물(11~13) / 지하수이용(21~23) / 드론영상(31) / 데이터 관리.
 tab_names = [
-    # ── 기상·지하수 그룹 (01~05) ──
-    "01.대시보드 요약",
-    "02.유역별 현황",
-    "03.강수량",
-    "04.지하수위",
-    "05.관측소 분석",
+    # ── 기상·지하수 그룹 (01~04) ──
+# 🆕 (2026-06-06) tab01·tab02 통합 → 01 라벨 변경, 02 제거
+# 🆕 모듈/라벨 재정렬: tab03/04/05 → tab02/03/04
+    "01.유역별현황",
+    "02.강수량",
+    "03.지하수위",
+    "04.관측소 분석",
     # ── 지하수시설물 그룹 (11~13) ──
     "11.관정 관리",
     "12.이용량 분석",
@@ -826,59 +826,51 @@ with tabs[0]:
 with tabs[1]:
     render_period_controls("t1")
     render_gw_warning()
-    tab02_watershed.render(
-        asos_df, ws_data_all, periods,
-        gwlevel_diff_dict=gwlevel_diff_dict,   # SSOT (2026-05-28 P2-4)
-    )
+    tab02_rainfall.render(asos_df, periods)
 
 with tabs[2]:
     render_period_controls("t2")
     render_gw_warning()
-    tab03_rainfall.render(asos_df, periods)
+    tab03_gwlevel.render(ws_data_all, periods, asos_df=asos_df)
 
 with tabs[3]:
     render_period_controls("t3")
     render_gw_warning()
-    tab04_gwlevel.render(ws_data_all, periods, asos_df=asos_df)
+    tab04_map.render(asos_df, periods, base_date=BASE_DATE)
 
 with tabs[4]:
-    render_period_controls("t4")
-    render_gw_warning()
-    tab05_map.render(asos_df, periods, base_date=BASE_DATE)
-
-with tabs[5]:
     tab11_ag_search.render()
 
-with tabs[6]:
+with tabs[5]:
     tab12_ag_usage.render()
 
-with tabs[7]:
+with tabs[6]:
     # 13. 수질 분석
     tab13_ag_quality.render()
 
-with tabs[8]:
+with tabs[7]:
     # 21. 이용량 통계
     tab21_ag_stats.render(asos_df=asos_df)
 
-with tabs[9]:
+with tabs[8]:
     # 22. 이용량 경향분석
     tab22_ag_usage_detail.render(asos_df=asos_df, periods=periods)
 
-with tabs[10]:
+with tabs[9]:
     # 23. 이용량 공간분석 (구 ⑧-2, 행정구역 choropleth)
     tab23_ag_usage_map.render()
 
 # ── 농업통계 그룹 (41~50) — 2026-05-25 ──
-with tabs[11]:
+with tabs[10]:
     tab41_population.render()
 
-with tabs[12]:
+with tabs[11]:
     tab42_farm_household.render()
 
-with tabs[13]:
+with tabs[12]:
     tab43_greenhouse.render()
 
-with tabs[14]:
+with tabs[13]:
     # 외부 공개판: tab99_admin (관리자 데이터 관리) 비활성
     try:
         from src.dashboard.tabs import tab99_admin
