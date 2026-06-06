@@ -336,19 +336,18 @@ iframe[height="0"] { display: block; height: 0 !important; }
     font-size: 15.4px !important;
     padding: 9px 11px !important;
 }
-/* 그룹 시작점 앞 추가 여백 — 도메인 그룹 시각 분리.
+/* 그룹 시작점 앞 추가 여백 — 도메인 그룹 시각 분리 (사용자 요청).
    nth-child 인덱스는 1-based, app.py:tab_names 순서와 일치.
-   2026-05-25: tab35(3D 시계열) 추가 → 데이터 관리 16→17 로 shift.
-   6  = 11.관정 관리       (기상·지하수 ↔ 지하수시설물)
-   9  = 21.이용량 통계     (지하수시설물 ↔ 지하수이용)
-   12 = 31.드론영상 현황    (지하수이용 ↔ 드론영상)
-   17 = ⚙️ 데이터 관리      (드론영상 ↔ 관리) */
-.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(6),
-.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(9),
-.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(12),
-.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(17),
-.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(20) {
-    margin-left: 26px !important;
+   2026-06-06 V1.1.3: 드론 제거 + tab01+02 통합 → 14탭으로 줄어듦.
+   5  = 11.관정 관리       (기상·지하수 01~04 ↔ 지하수시설물 11~13)
+   8  = 21.이용량 통계     (지하수시설물 ↔ 지하수이용 21~23)
+   11 = 41.농가현황         (지하수이용 ↔ 농업통계 41~43)
+   14 = ⚙️ 데이터 관리      (농업통계 ↔ 관리) */
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(5),
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(8),
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(11),
+.stTabs [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(14) {
+    margin-left: 20px !important;
 }
 .tab-title {
     margin: 0 0 12px 0 !important;
