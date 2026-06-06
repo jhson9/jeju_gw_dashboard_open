@@ -1,15 +1,15 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/_tab05_charts.py
+#  파일명: src/dashboard/tabs/_tab04_charts.py
 #  ④ 공간 분석 탭 — 12개월 차트/표 + 월별 통계 (관측정 디테일 + AWS 디테일 공용)
 #
-#  Source 분리: tab05_map.py 1055줄 → 그룹별 분리 2단계 (2026-05-09).
+#  Source 분리: tab04_map.py 1055줄 → 그룹별 분리 2단계 (2026-05-09).
 #    - _render_12month_chart       : 12개월 막대그래프 (실측 + 과거평균)
 #    - _render_12month_table       : 12개월 가로 표 (실측/평균/편차 3행)
 #    - _build_station_12month_table: 일자료 EL 을 (연월) 단위 월평균 + baseline
 #    - _render_monthly_boxplot     : 최근 12개월 일자료 EL 박스플롯
 #    - _render_monthly_stats_table : 월별 기초통계표 (평균/중앙/max/min/std/일수)
 #
-#  외부 사용처: tab05_map.py 내부 전용. underscore prefix.
+#  외부 사용처: tab04_map.py 내부 전용. underscore prefix.
 # ==============================================================================
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import streamlit as st
 
 from src.analysis import aws_yearly
 from src.dashboard import theme
-from src.dashboard.tabs._tab05_helpers import _diff_html, _smart_period_labels
+from src.dashboard.tabs._tab04_helpers import _diff_html, _smart_period_labels
 
 
 # ==============================================================================

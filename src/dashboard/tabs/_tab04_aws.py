@@ -1,12 +1,12 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/_tab05_aws.py
+#  파일명: src/dashboard/tabs/_tab04_aws.py
 #  ④ 공간 분석 탭 — AWS (기상관측소) 디테일 렌더
 #
-#  Source 분리: tab05_map.py 1055줄 → 그룹별 분리 3단계 (2026-05-09).
+#  Source 분리: tab04_map.py 1055줄 → 그룹별 분리 3단계 (2026-05-09).
 #    - _render_aws_detail : AWS 마커 클릭 시 12개월 강수량/유효강수일수 +
 #                            10년+ 일별/월별 강수 추이 + 농업유효 차트
 #
-#  외부 사용처: tab05_map.py 내부 전용 (render() 가 호출). underscore prefix.
+#  외부 사용처: tab04_map.py 내부 전용 (render() 가 호출). underscore prefix.
 # ==============================================================================
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ import streamlit as st
 import config
 from src.analysis import effective_rainfall, aws_yearly
 from src.dashboard import theme
-from src.dashboard.tabs._tab05_helpers import _baseline_footnote
-from src.dashboard.tabs._tab05_charts import (
+from src.dashboard.tabs._tab04_helpers import _baseline_footnote
+from src.dashboard.tabs._tab04_charts import (
     _render_12month_chart,
     _render_12month_table,
 )

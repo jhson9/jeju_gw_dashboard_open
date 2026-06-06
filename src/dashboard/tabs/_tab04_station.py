@@ -1,13 +1,13 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/_tab05_station.py
+#  파일명: src/dashboard/tabs/_tab04_station.py
 #  ④ 공간 분석 탭 — 관측정 디테일 렌더 (지하수위 일자료 분석)
 #
-#  Source 분리: tab05_map.py 1055줄 → 그룹별 분리 4단계 (마지막) (2026-05-09).
+#  Source 분리: tab04_map.py 1055줄 → 그룹별 분리 4단계 (마지막) (2026-05-09).
 #    - _load_day_cached         : 일자료 CSV 캐시 (관측정 단위)
 #    - _render_station_detail   : 마커 클릭 시 정보표 + 일자료 시계열 +
 #                                  12개월 EL 평균 + 박스플롯 + 월별 통계
 #
-#  외부 사용처: tab05_map.py 내부 전용. underscore prefix.
+#  외부 사용처: tab04_map.py 내부 전용. underscore prefix.
 # ==============================================================================
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from plotly.subplots import make_subplots
 import config
 from src.collectors import gwlevel_day_parser
 from src.dashboard import theme
-from src.dashboard.tabs._tab05_helpers import _baseline_footnote
-from src.dashboard.tabs._tab05_charts import (
+from src.dashboard.tabs._tab04_helpers import _baseline_footnote
+from src.dashboard.tabs._tab04_charts import (
     _render_12month_chart,
     _render_12month_table,
     _build_station_12month_table,

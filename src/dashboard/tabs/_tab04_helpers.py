@@ -1,13 +1,13 @@
 # ==============================================================================
-#  파일명: src/dashboard/tabs/_tab05_helpers.py
+#  파일명: src/dashboard/tabs/_tab04_helpers.py
 #  ④ 공간 분석 탭 — 포맷 헬퍼 (색상 diff, 기간 라벨, baseline 각주)
 #
-#  Source 분리: tab05_map.py 1055줄 → 그룹별 분리 1단계 (2026-05-09).
+#  Source 분리: tab04_map.py 1055줄 → 그룹별 분리 1단계 (2026-05-09).
 #    - _diff_html              : 양수/음수 색상 표시 HTML (theme.COLOR_SUCCESS/DANGER)
 #    - _smart_period_labels    : 12개월 표 컬럼 라벨 (연도 변경 칸만 'YY년 M월')
 #    - _baseline_footnote      : baseline 연도 그룹 각주 텍스트
 #
-#  외부 사용처: tab05_map.py 내부 전용 (외부 호출 0건). underscore prefix 로
+#  외부 사용처: tab04_map.py 내부 전용 (외부 호출 0건). underscore prefix 로
 #  module-private 표기.
 # ==============================================================================
 from __future__ import annotations
