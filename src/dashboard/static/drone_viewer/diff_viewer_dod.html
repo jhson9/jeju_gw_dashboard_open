@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<!--
+  드론 정사영상 시계열 비교 + DoD (DEM of Difference) 뷰어
+  Build 1.0 (2026-06-03) — diff_viewer.html 의 사본 + DoD overlay 추가
+
+  설계 (20-에이전트 합의):
+   - diff_viewer.html (Build 2.1) 의 정사영상 좌·우 동기화 그대로 유지
+   - 추가: DoD 컬러 PNG 를 양쪽 viewer 위에 ImageOverlay 로 표시
+   - pane orthoDoD (z=425) — orthoHD(420) 위, overlayPane(400) 위
+   - JS 로 opacity / visible 동적 제어 (parent.postMessage 또는 hash 변경)
+   - dod_img 비었으면 layer 비활성, 사용자에겐 "DoD 미생성" 안내 layer
+
+  파라미터:
+    query: l=<left_mission_id>&r=<right_mission_id>&_v=<cache_buster>
+    hash:  left_img, left_bounds, left_label, left_tiles,
+           right_img, right_bounds, right_label, right_tiles,
+           vworld_key, host_8501,
+           dod_img, dod_opacity, dod_visible       ← 추가
+           hs_img, hs_bounds, hs_opacity           ← 🆕 (2026-06-11 Q4) hillshade
+
+  관련 메모리: [[project-drone-dod-experimental-36-37]]
+-->
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>드론 정사영상 시계열 + DoD</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.sync@0.2.4/L.Map.Sync.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden;
+                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #split { display: flex; height: 100%; width: 100%; }
+    .panel { flex: 1; position: relative; min-width: 0; }
+    .panel + .panel { border-left: 2px solid #2a2a28; }
+    .map { width: 100%; height: 100%; }
+    .label {
+      position: absolute; top: 8px; left: 8px; z-index: 1000;
+      background: rgba(0,0,0,0.72); color: #fff;
+      padding: 4px 12px; border-radius: 4px;
+      font-size: 13px; font-weight: 600;
+      pointer-events: none;
+      max-width: 80%;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .label.left  { border-left: 4px solid #4a90e2; }
+    .label.right { border-left: 4px solid #e6a23c; }
+    /* DoD 상태 배지 — 우측 패널 상단 우측 */
+    .dod-badge {
+      position: absolute; top: 8px; right: 8px; z-index: 1000;
+      background: rgba(80, 35, 110, 0.86); color: #fff;
+      padding: 4px 12px; border-radius: 4px;
+      font-size: 12px; font-weight: 600;
+      pointer-events: none;
+    }
+    .dod-badge.off { background: rgba(60, 60, 60, 0.86); }
+    .dod-badge.sim { background: rgba(160, 110, 30, 0.86); }
+    /* DoD 색상 범례 — 우측 패널 하단 우측 */
+    .dod-legend {
+      position: absolute; bottom: 12px; right: 12px; z-index: 1000;
+      background: rgba(255,255,255,0.92); color: #222;
+      padding: 6px 8px; border-radius: 4px;
+      font-size: 11px; font-family: monospace;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      pointer-events: none;
+    }
+    .dod-legend .row { display: flex; align-items: center; gap: 4px; }
+    .dod-legend .sw {
+      width: 14px; height: 12px; border: 1px solid #555; display: inline-block;
+    }
+    #err {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); z-index: 9999;
+      background: rgba(160,40,40,0.92); color: #fff;
+      padding: 20px 30px; border-radius: 6px;
+      font-size: 14px; display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="split">
+  <div class="panel">
+    <div class="label left" id="lbl-left">◀ 좌측</div>
+    <div class="map" id="map-left"></div>
+  </div>
+  <div class="panel">
+    <div class="label right" id="lbl-right">우측 ▶</div>
+    <div class="dod-badge" id="dod-badge">DoD: 로드 중…</div>
+    <div class="map" id="map-right"></div>
+    <div class="dod-legend" id="dod-legend" style="display:none;">
+      <div style="font-weight:700;margin-bottom:3px;">DoD (Δz, m)</div>
+      <div class="row"><span class="sw" style="background:#08519c;"></span>&minus;1.0 큰 감소</div>
+      <div class="row"><span class="sw" style="background:#6baed6;"></span>&minus;0.3 감소</div>
+      <div class="row"><span class="sw" style="background:#f7f7f7;"></span>&plusmn;0 변화 없음</div>
+      <div class="row"><span class="sw" style="background:#fc9272;"></span>+0.3 증가</div>
+      <div class="row"><span class="sw" style="background:#a50f15;"></span>+1.0 큰 증가</div>
+    </div>
+  </div>
+</div>
+<div id="err"></div>
+<script>
+window.addEventListener('hashchange', () => location.reload());
+
+(function () {
+  const errEl = document.getElementById('err');
+  const showErr = (m) => { errEl.textContent = '⚠ ' + m; errEl.style.display = 'block'; };
+
+  try {
+    // [공개판] Streamlit Cloud 인라인 렌더 지원 — components.html 로 삽입될 때
+    // location.hash 가 없으므로 window.__PARAMS__ 전역을 우선 사용.
+    const p = new URLSearchParams(window.__PARAMS__ || location.hash.slice(1));
+    const leftImg    = p.get('left_img');
+    const leftTiles  = p.get('left_tiles');
+    const leftBoundsStr  = p.get('left_bounds');
+    const leftLabel  = p.get('left_label') || '좌측';
+    const rightImg   = p.get('right_img');
+    const rightTiles = p.get('right_tiles');
+    const rightBoundsStr = p.get('right_bounds');
+    const rightLabel = p.get('right_label') || '우측';
+    const vworldKey  = (p.get('vworld_key') || '').trim();
+    const host8501   = p.get('host_8501') || (location.protocol + '//' + location.hostname + ':8501');
+    // ── DoD 추가 파라미터 ──
+    const dodImg      = (p.get('dod_img') || '').trim();
+    const dodBoundsS  = (p.get('dod_bounds') || '').trim();   // "latMin,lonMin,latMax,lonMax"
+    const dodOpacity  = Math.min(1, Math.max(0, parseFloat(p.get('dod_opacity') || '0.65')));
+    const dodVisible  = (p.get('dod_visible') || '1') === '1';
+    // ── 🆕 (2026-06-11 Q4) hillshade 파라미터 — DoD 아래 음영기복 ──
+    const hsImg       = (p.get('hs_img') || '').trim();       // 빈 문자열 = 비활성
+    const hsBoundsS   = (p.get('hs_bounds') || '').trim();    // "latMin,lonMin,latMax,lonMax"
+    const hsOpacity   = Math.min(1, Math.max(0, parseFloat(p.get('hs_opacity') || '0.35')));
+
+    if (!leftImg || !leftBoundsStr || !rightImg || !rightBoundsStr) {
+      showErr('필수 파라미터 누락 (left_img, left_bounds, right_img, right_bounds)');
+      return;
+    }
+
+    function parseBounds(s) {
+      const [a, b, c, d] = s.split(',').map(parseFloat);
+      return [[a, b], [c, d]];
+    }
+    const leftBounds  = parseBounds(leftBoundsStr);
+    const rightBounds = parseBounds(rightBoundsStr);
+
+    function calcCommonBounds(lb, rb) {
+      const latMin = Math.max(lb[0][0], rb[0][0]);
+      const lonMin = Math.max(lb[0][1], rb[0][1]);
+      const latMax = Math.min(lb[1][0], rb[1][0]);
+      const lonMax = Math.min(lb[1][1], rb[1][1]);
+      if (latMin < latMax && lonMin < lonMax) {
+        return [[latMin, lonMin], [latMax, lonMax]];
+      }
+      const cLat = ((lb[0][0]+lb[1][0]) + (rb[0][0]+rb[1][0])) / 4;
+      const cLon = ((lb[0][1]+lb[1][1]) + (rb[0][1]+rb[1][1])) / 4;
+      const hLat = Math.min((lb[1][0]-lb[0][0]), (rb[1][0]-rb[0][0])) / 2;
+      const hLon = Math.min((lb[1][1]-lb[0][1]), (rb[1][1]-rb[0][1])) / 2;
+      return [[cLat - hLat, cLon - hLon], [cLat + hLat, cLon + hLon]];
+    }
+    const commonBounds = calcCommonBounds(leftBounds, rightBounds);
+
+    document.getElementById('lbl-left').textContent  = '◀ ' + leftLabel;
+    document.getElementById('lbl-right').textContent = rightLabel + ' ▶';
+
+    const cy = (commonBounds[0][0] + commonBounds[1][0]) / 2;
+    const cx = (commonBounds[0][1] + commonBounds[1][1]) / 2;
+
+    const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+    // DoD 레이어 인스턴스 저장 — opacity/visible 동적 제어용
+    const dodLayers = [];   // {map, layer}
+
+    function makeMap(elId, imgUrl, tileTpl, bounds, side) {
+      const map = L.map(elId, {
+        center: [cy, cx],
+        zoom: 18,
+        maxZoom: 25,
+        minZoom: 8,
+        zoomControl: true,
+        attributionControl: true,
+      });
+
+      // pane z-index: tilePane(200) < orthoBase(410) < orthoHD(420) < orthoDoD(425) < overlay(400 → 위로 올림 위해 별도 pane)
+      map.createPane('orthoBase');
+      map.getPane('orthoBase').style.zIndex = 410;
+      map.createPane('orthoHD');
+      map.getPane('orthoHD').style.zIndex = 420;
+      // ⭐ 🆕 (2026-06-11 Q4) hillshade pane (z=423) — 정사영상(420) 위,
+      //    DoD(425) **아래** — 지형 굴곡 맥락 위에 DoD 색이 얹힘
+      map.createPane('orthoHS');
+      map.getPane('orthoHS').style.zIndex = 423;
+      // ⭐ DoD pane (z=425) — 정사영상 위에 반투명 색상 overlay
+      map.createPane('orthoDoD');
+      map.getPane('orthoDoD').style.zIndex = 425;
+
+      // V-World 로컬 캐시 + API HD
+      const baseLocal = L.tileLayer(
+        host8501 + '/app/static/map_tiles/Base/{z}/{x}/{y}.png',
+        { attribution: 'ⓒ V-World (local cache)', maxZoom: 25, maxNativeZoom: 14, minZoom: 8 }
+      );
+      const satLocal = L.tileLayer(
+        host8501 + '/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg',
+        { attribution: 'ⓒ V-World (local cache)', maxZoom: 25, maxNativeZoom: 14, minZoom: 8 }
+      );
+      let baseHD = null, satHD = null;
+      if (vworldKey) {
+        baseHD = L.tileLayer(
+          'https://api.vworld.kr/req/wmts/1.0.0/' + vworldKey + '/Base/{z}/{y}/{x}.png',
+          { attribution: 'ⓒ V-World', minZoom: 15, maxZoom: 19 }
+        );
+        satHD = L.tileLayer(
+          'https://api.vworld.kr/req/wmts/1.0.0/' + vworldKey + '/Satellite/{z}/{y}/{x}.jpeg',
+          { attribution: 'ⓒ V-World', minZoom: 15, maxZoom: 19 }
+        );
+      }
+      baseLocal.addTo(map);
+      if (baseHD) baseHD.addTo(map);
+
+      // Build 1.1 fix (2026-06-03 사용자 제보):
+      //   원본 tab34 viewer 는 orthoFallback(PNG 8192px) + orthoTile(HD XYZ)
+      //   두 layer 를 모두 활성화했었음. PNG 와 HD 타일의 georeferencing 미세
+      //   차이로 가장자리에 ghost/duplicate 이미지가 보이는 현상 발생.
+      //   DoD 색상 overlay 가 추가되며 사용자가 그 ghost 를 명확히 인지.
+      //   → orthoFallback 비활성. HD 타일만 사용. sparse 영역은 V-World 통과.
+      //   (PNG fallback 이 필요하면 사용자가 Layer control 에서 토글)
+      let orthoFallback = null, orthoTile = null;
+      if (tileTpl) {
+        orthoTile = L.tileLayer(tileTpl, {
+          pane: 'orthoHD', attribution: 'ⓒ DJI Terra',
+          minZoom: 12, maxZoom: 25, maxNativeZoom: 22,
+          opacity: 1.0, tms: false,
+          errorTileUrl: TRANSPARENT_PIXEL,
+        }).addTo(map);
+      }
+      // PNG fallback 은 layer control 에 등록만 하고 기본 OFF —
+      // HD 타일 완전 실패 시 사용자가 수동 활성.
+      if (imgUrl) {
+        orthoFallback = L.imageOverlay(imgUrl, bounds, {
+          pane: 'orthoBase', opacity: 1.0, interactive: false,
+        });
+        // 기본 비활성 (Layer control 토글) — 단, [공개판] HD 타일이 아예 없으면
+        // PNG 가 유일한 정사영상이므로 자동 활성.
+        if (!tileTpl) orthoFallback.addTo(map);
+      }
+
+      // ⭐ 🆕 (2026-06-11 Q4) hillshade overlay — DoD 아래(z=423), 양쪽 pane.
+      //    hs_img 빈 문자열이면 비활성 (하위 호환). hashchange 는 location.reload()
+      //    방식이라 토글 변경 시 자동 재로드 — 추가 JS 불필요.
+      let hsLayer = null;
+      if (hsImg) {
+        let hsB = null;
+        if (hsBoundsS) {
+          const hp = hsBoundsS.split(',').map(parseFloat);
+          if (hp.length === 4 && hp.every(isFinite)) {
+            hsB = [[hp[0], hp[1]], [hp[2], hp[3]]];
+          }
+        }
+        if (!hsB) hsB = (side === 'left') ? leftBounds : rightBounds;
+        hsLayer = L.imageOverlay(hsImg, hsB, {
+          pane: 'orthoHS',
+          opacity: hsOpacity,
+          interactive: false,
+        }).addTo(map);
+      }
+
+      // ⭐ DoD overlay — 양쪽 viewer 모두 같은 bbox 로 (정확한 교집합 영역)
+      let dodLayer = null;
+      if (dodImg) {
+        // dod_bounds (compute_diff 가 산출한 정확한 WGS84 교집합) 우선,
+        // 없으면 폴백으로 해당 side 의 bbox 사용.
+        let useBounds;
+        if (dodBoundsS) {
+          const parts = dodBoundsS.split(',').map(parseFloat);
+          if (parts.length === 4 && parts.every(isFinite)) {
+            useBounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+          }
+        }
+        if (!useBounds) useBounds = (side === 'left') ? leftBounds : rightBounds;
+        dodLayer = L.imageOverlay(dodImg, useBounds, {
+          pane: 'orthoDoD',
+          opacity: dodVisible ? dodOpacity : 0,
+          interactive: false,
+        }).addTo(map);
+        dodLayers.push({map: map, layer: dodLayer, side: side});
+      }
+
+      // BBOX 사각형
+      L.rectangle(bounds, {
+        color: '#3388ff', weight: 2, fill: false, interactive: false,
+      }).addTo(map);
+
+      const baseLayers = {
+        'V-World 일반': baseLocal,
+        'V-World 위성': satLocal,
+      };
+      const overlays = {};
+      if (orthoTile)     overlays['드론 정사영상 (HD 타일)'] = orthoTile;
+      if (orthoFallback) overlays['드론 정사영상 (기본 PNG)'] = orthoFallback;
+      if (hsLayer)       overlays['음영기복 (hillshade)'] = hsLayer;
+      if (dodLayer)      overlays['DoD (Δz 색상)'] = dodLayer;
+      if (baseHD) overlays['V-World 일반 HD (zoom 15+)'] = baseHD;
+      if (satHD)  overlays['V-World 위성 HD (zoom 15+)'] = satHD;
+      L.control.layers(baseLayers, overlays, { collapsed: true, position: 'bottomright' }).addTo(map);
+
+      return map;
+    }
+
+    const leftMap  = makeMap('map-left',  leftImg,  leftTiles,  leftBounds,  'left');
+    const rightMap = makeMap('map-right', rightImg, rightTiles, rightBounds, 'right');
+
+    // DoD 상태 배지 업데이트
+    const badge = document.getElementById('dod-badge');
+    const legend = document.getElementById('dod-legend');
+    if (!dodImg) {
+      badge.textContent = 'DoD: 미생성 (시뮬레이션/대기)';
+      badge.classList.add('off');
+      legend.style.display = 'none';
+    } else if (dodImg.includes('simulation') || dodImg.endsWith('=sim')) {
+      badge.textContent = 'DoD: 시뮬레이션 (Δ=0)';
+      badge.classList.add('sim');
+      legend.style.display = 'block';
+    } else {
+      badge.textContent = 'DoD: 활성 (불투명도 ' + Math.round(dodOpacity * 100) + '%)';
+      legend.style.display = 'block';
+    }
+
+    // ── parent (Streamlit) 에서 postMessage 로 DoD opacity/visible 제어 ──
+    // 사용자가 슬라이더 조정 시 iframe reload 없이 즉시 반영.
+    window.addEventListener('message', (ev) => {
+      if (!ev.data || ev.data.type !== 'dod-control') return;
+      const op = (typeof ev.data.opacity === 'number')
+                  ? Math.min(1, Math.max(0, ev.data.opacity)) : null;
+      const vis = (typeof ev.data.visible === 'boolean') ? ev.data.visible : null;
+      dodLayers.forEach(({layer}) => {
+        if (op !== null) layer.setOpacity(vis === false ? 0 : op);
+        else if (vis !== null) layer.setOpacity(vis ? dodOpacity : 0);
+      });
+      if (op !== null && dodImg) {
+        badge.textContent = 'DoD: 활성 (불투명도 ' + Math.round(op * 100) + '%)';
+      }
+      if (vis === false) {
+        badge.textContent = 'DoD: OFF';
+        legend.style.display = 'none';
+      } else if (vis === true && dodImg) {
+        legend.style.display = 'block';
+      }
+    });
+
+    leftMap.sync(rightMap,  { syncCursor: true, syncCursorMarkerOptions: {
+      radius: 6, fillOpacity: 0.4, color: '#e6a23c', weight: 2,
+    }});
+    rightMap.sync(leftMap, { syncCursor: true, syncCursorMarkerOptions: {
+      radius: 6, fillOpacity: 0.4, color: '#4a90e2', weight: 2,
+    }});
+
+    setTimeout(() => {
+      rightMap.fitBounds(rightBounds, { padding: [5, 5] });
+    }, 200);
+
+    function onResize() { leftMap.invalidateSize(); rightMap.invalidateSize(); }
+    window.addEventListener('resize', onResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(onResize);
+      ro.observe(document.getElementById('split'));
+    }
+
+  } catch (e) {
+    showErr('초기화 실패: ' + (e && e.message ? e.message : e));
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# 2026-05-29 추가 — 사용자 보고 'oard'/'auncher' bat 파싱 오류 회귀 차단.
+# Windows cmd.exe 는 CRLF 줄바꿈을 요구. Git autocrlf 환경에 따라
+# LF-only 로 변환되면 라벨/조건문 파싱이 깨져 단어 일부가 명령으로 해석됨.
+# 본 .gitattributes 가 Windows bat/cmd/ps1 파일을 CRLF 로 고정.
+
+# Windows 실행 파일 — 항상 CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Python / config / docs — LF (Unix 표준, Windows 도 지원)
+*.py        text eol=lf
+*.toml      text eol=lf
+*.md        text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.json      text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+
+# 바이너리 — Git 이 LF/CRLF 변환 시도하지 않도록 명시
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.pdf       binary
+*.xlsx      binary
+*.xls       binary
+*.tif       binary
+*.tiff      binary
+*.ply       binary
+*.b3dm      binary
+*.glb       binary
+*.gltf      binary
+*.zip       binary
+*.gz        binary
+*.parquet   binary

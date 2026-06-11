@@ -1,0 +1,88 @@
+{
+  "version": "1.2",
+  "description": "[공개판] 덕천저수조 2시점만 동봉 (preview.png 다운샘플 2048px). 3D/DSM/점군 원본은 공개 배포 제외 — available=false. 제주 지하수 대시보드 드론 영상 미션 레지스트리. data/04_drone/ 안 미션들을 enumerate. 신규 미션 추가 시 이 파일의 missions 배열에 한 항목 추가 + 해당 폴더에 meta.json 작성. site_id 가 같은 미션들은 시계열 비교 후보로 자동 인식됨 (Phase 2).",
+  "updated": "2026-06-11",
+  "default_center": [
+    33.4,
+    126.55
+  ],
+  "default_zoom": 10,
+  "site_types": [
+    "저수조",
+    "저수지",
+    "관정",
+    "수원지",
+    "기타",
+    "용천수"
+  ],
+  "sites": {
+    "deokcheon_reservoir": {
+      "name": "구좌 덕천리 저수조",
+      "site_type": "저수조"
+    }
+  },
+  "missions": [
+    {
+      "id": "2505_구좌덕천저수조",
+      "site_id": "deokcheon_reservoir",
+      "name": "구좌 덕천리 저수조",
+      "site_type": "저수조",
+      "site_category": "농업용",
+      "eup_myeon_dong": "구좌읍 덕천리",
+      "flight_date": "2025-05",
+      "data_dir": "2505_구좌덕천저수조",
+      "outputs": {
+        "tiles_2d": {
+          "available": true,
+          "kind": "image_overlay",
+          "source": "map/result.tif"
+        },
+        "tiles_3d": {
+          "available": false,
+          "tileset": "models/pc/0/terra_b3dms/tileset.json"
+        },
+        "dsm": {
+          "available": false,
+          "source": "map/dsm.tif"
+        },
+        "pointcloud_ply": {
+          "available": false
+        }
+      },
+      "comparable_with": [
+        "2605_구좌덕천저수조"
+      ]
+    },
+    {
+      "id": "2605_구좌덕천저수조",
+      "site_id": "deokcheon_reservoir",
+      "name": "구좌 덕천 저수조",
+      "site_type": "저수조",
+      "site_category": "저수조",
+      "eup_myeon_dong": "구좌읍 덕천리",
+      "flight_date": "2026-05",
+      "data_dir": "2605_구좌덕천저수조",
+      "comparable_with": [
+        "2505_구좌덕천저수조"
+      ],
+      "outputs": {
+        "tiles_2d": {
+          "available": true,
+          "kind": "image_overlay",
+          "source": "map/result.tif"
+        },
+        "tiles_3d": {
+          "available": false,
+          "tileset": "models/pc/0/terra_b3dms/tileset.json"
+        },
+        "dsm": {
+          "available": false,
+          "source": "map/dsm.tif"
+        },
+        "pointcloud_ply": {
+          "available": false
+        }
+      }
+    }
+  ]
+}

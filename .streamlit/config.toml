@@ -1,0 +1,20 @@
+# Streamlit 서버 설정
+# - 8501 은 Windows 예약 포트 범위(8452-8551)에 걸려 PermissionError 발생
+# - 8765 는 Hyper-V/WSL/Docker 활성 시 예약 범위에 포함되어 PermissionError 발생
+#   (사용자 보고 2026-05-29: WinError 10013)
+# - 18501 은 private port range (>=49152 이상이 안전하지만 18501 이 일반적으로 안전)
+#   확인: PowerShell 에서
+#     netsh interface ipv4 show excludedportrange protocol=tcp
+#   결과의 어느 범위에도 포함되지 않는 포트 선택.
+# - enableStaticServing: 프로젝트 루트의 static/ 폴더를 /app/static/ 으로 노출.
+#   관정카드 PDF 를 새 탭에서 열기 위함. static/well_card/{year} 만 두고
+#   data_well_card/ 의 _split_log_*.csv, _unmatched_in_master.csv 같은
+#   내부 로그는 노출되지 않도록 격리 (static_pdf_serve._ensure_pdf_links).
+# - port mismatch 방지: _launch_browser.ps1 / pdf_server.py CORS 화이트리스트 /
+#   _drone_helpers host_8501 도 같은 포트로 동기화해야 함.
+[server]
+port = 18501
+headless = true
+enableStaticServing = true
+enableCORS = false
+enableXsrfProtection = false

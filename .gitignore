@@ -1,0 +1,99 @@
+# ==============================================================================
+#  .gitignore — 제주 지하수 대시보드 공개판 (Compact_Open)
+# ------------------------------------------------------------------------------
+#  【2026-06-11 전면 개정】 무료 운영 원칙:
+#   · Git LFS 미사용 (LFS bandwidth 비용 0) — 단일 파일 100MB 미만 유지
+#   · 대용량 원본(드론 tif/3D, 관정카드 PDF, 토지피복 raw)은 전부 제외
+#   · 드론은 덕천저수조 2시점의 다운샘플 preview.png(각 ~5MB)만 동봉
+# ==============================================================================
+
+# --- 비밀 정보 (절대 Git에 올리면 안 됨!) ---
+.env
+*.env
+!.env.example
+.streamlit/secrets.toml
+
+# --- Python 캐시 ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# --- 가상환경 ---
+venv/
+env/
+ENV/
+.venv/
+
+# --- IDE / OS / 에이전트 ---
+.vscode/
+*.code-workspace
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 로그·임시·백업 ---
+*.log
+logs/
+*.tmp
+*.bak
+*.bak_*
+~$*
+_fix_backup_*/
+_verify_*
+_archive*/
+Reference/
+ISO-V4_SquareUp_*.png
+_launch_browser.ps1
+
+# ==============================================================================
+#  대용량 데이터 — 공개 배포 제외 (로컬 전용)
+# ==============================================================================
+
+# 관정 카드·지질주상도 PDF (수 GB)
+data/02_well/well_card/
+data/02_well/drilling_log/
+data/02_well/drilling_log_*/
+
+# 강수·지하수위 원본 (재처리용 raw — 대시보드는 처리본 CSV/parquet 사용)
+data/01_rain_gwlevel/Row_Data/
+
+# 토지피복 원본 셰이프/래스터
+data/06_landcover/raw/
+
+# 챗봇 RAG 자료 (법령 PDF + 벡터 index) — 공개판은 코드만 동봉
+data/07_chatbot/
+
+# 산출 보고서
+data/reports/
+
+# 오프라인 지도 타일 캐시·JS 라이브러리 번들 (Cesium 등 230MB+)
+src/dashboard/static/map_tiles/
+src/dashboard/static/libs/*
+!src/dashboard/static/libs/leaflet_offline/
+
+# ==============================================================================
+#  드론 자료 — 전체 제외 후 덕천저수조 2시점 최소자료만 allowlist
+#  (meta.json + 다운샘플 preview.png + registry.json)
+# ==============================================================================
+data/04_drone/*
+!data/04_drone/registry.json
+
+!data/04_drone/2505_구좌덕천저수조/
+data/04_drone/2505_구좌덕천저수조/*
+!data/04_drone/2505_구좌덕천저수조/meta.json
+!data/04_drone/2505_구좌덕천저수조/derived/
+data/04_drone/2505_구좌덕천저수조/derived/*
+!data/04_drone/2505_구좌덕천저수조/derived/preview.png
+
+!data/04_drone/2605_구좌덕천저수조/
+data/04_drone/2605_구좌덕천저수조/*
+!data/04_drone/2605_구좌덕천저수조/meta.json
+!data/04_drone/2605_구좌덕천저수조/derived/
+data/04_drone/2605_구좌덕천저수조/derived/*
+!data/04_drone/2605_구좌덕천저수조/derived/preview.png

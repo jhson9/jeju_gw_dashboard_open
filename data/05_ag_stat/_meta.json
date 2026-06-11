@@ -1,0 +1,37 @@
+{
+  "title": "제주 농업통계 데이터셋 (tab41~45) — V3 data/05_ag_stat",
+  "primary_sources": [
+    "제65회 제주통계연보(2024년 기준)",
+    "2025 제주 주요행정통계",
+    "제주 농업용수 종합계획 수립 보고서",
+    "농림축산식품부 농업경영체 등록정보 현황 서비스(AgriX, https://uni.agrix.go.kr/docs7/biOlap/, 자료갱신 2026.3.17. · 추출일 2026.6.3.)"
+  ],
+  "agrix_dataset": {
+    "file": "agrix_jeju_yearly.csv",
+    "scope": "농업경영체 경영주 주소 기준 · 시군 단위",
+    "years_available": [2018, 2020, 2022, 2024, 2025],
+    "note": "AgriX 등록 경영체 수는 통계연보 농가수와 정의가 달라 직접 대체 불가 — 보조지표로 병기"
+  },
+  "base_year": 2024,
+  "comparison_slots": {
+    "2013_baseline": "보고서(2013) 확보 시 연도=2013 행을 *_yearly.csv 에 append"
+  },
+  "eupmyeon_geojson_names": [
+    "한림읍",
+    "애월읍",
+    "구좌읍",
+    "조천읍",
+    "한경면",
+    "대정읍",
+    "남원읍",
+    "성산읍",
+    "안덕면",
+    "표선면",
+    "제주시 동지역",
+    "서귀포시 동지역"
+  ],
+  "geojson_unmapped_eupmyeon": [
+    "추자면",
+    "우도면"
+  ]
+}
