@@ -85,8 +85,9 @@ try:
     )
 except Exception as _e:   # noqa: BLE001
     import traceback
-    print(f"[MIME-PATCH] FAILED · {_e}", file=sys.stderr, flush=True)
-    traceback.print_exc()
+    if "MIME patch 불필요" not in str(_e):
+        print(f"[MIME-PATCH] FAILED · {_e}", file=sys.stderr, flush=True)
+        traceback.print_exc()
 
 
 # ──────────────────────────────────────────────────────────────────

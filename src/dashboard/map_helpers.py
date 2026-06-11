@@ -50,6 +50,17 @@ def _apply_offline_map_libs() -> bool:
     매번 원본 기준으로 재구성하므로 중복/누적 교체가 없다.
     반환: 오프라인(로컬) 적용 여부.
     """
+    # [공개판 V2.1.1] Streamlit Cloud 에선 오프라인 엔진 비활성 — st_folium
+    # 컴포넌트 iframe 안에서 로컬 Leaflet 자원 로드가 실패해 4·11~13탭 지도가
+    # 통째로 미표시됐음 (콘솔 Uncaught Event ×5 확인). Cloud 는 인터넷이
+    # 보장되므로 원래 CDN 을 그대로 사용한다 (V1.x 와 동일 — 검증된 경로).
+    from pathlib import Path as _P
+    if _P("/mount/src").exists():
+        folium.Map.default_js = list(_ORIG_MAP_JS)
+        folium.Map.default_css = list(_ORIG_MAP_CSS)
+        folium.RegularPolygonMarker.default_js = list(_ORIG_DVF_JS)
+        return False
+
     try:
         from src.dashboard import tile_cache
         ready = tile_cache.map_libs_ready()

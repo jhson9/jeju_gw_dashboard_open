@@ -159,8 +159,19 @@ def preview_static_url(m: Mission) -> str | None:
     """
     slug = _mission_slug(m)
     f = _DRONE_STATIC_DIR / slug / "preview.png"
-    if f.exists():
-        return f"/app/static/drone/{slug}/preview.png"
+    if not f.exists():
+        return None
+    # [V2.1.1] folium 의 image_to_url 은 scheme 없는 "/app/..." 문자열을
+    # 로컬 파일 경로로 오인해 서버에서 open() → Cloud 에서 PermissionError.
+    # → Host 헤더로 절대 https URL 을 만들어 전달 (folium 이 URL 로 인식).
+    #   브라우저에선 Cloud 의 service worker 가 /~/+/ 프록시로 변환해 서빙.
+    try:
+        host = (st.context.headers.get("Host")
+                or st.context.headers.get("host") or "").strip()
+    except Exception:
+        host = ""
+    if host:
+        return f"https://{host}/app/static/drone/{slug}/preview.png"
     return None
 
 
