@@ -148,6 +148,54 @@ def available_drilling_pdfs(well_id: str | None) -> list[tuple[str, str]]:
 
 
 # ── 렌더러 ──────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+#  [공개판 V2.2.0] Cloud 전용 PDF 박스 — 구좌읍 시연 자료
+#  - repo 동봉: static/well_card/2025/<허가번호>.pdf (51건),
+#               static/drilling_log/<허가번호>.pdf (56건), index.json
+#  - 허가번호(ASCII) 파일명 → 한글 percent-encoding 사고 회피
+#  - 링크는 Cloud 실서빙 경로(/~/+/app/static/...) 직접 사용
+# ══════════════════════════════════════════════════════════════════
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _is_cloud() -> bool:
+    return Path("/mount/src").exists()
+
+
+@st.cache_data(show_spinner=False)
+def _cloud_pdf_index(mtime: float) -> dict:
+    f = _STATIC_DIR / "well_card" / "index.json"
+    try:
+        return json.loads(f.read_text(encoding="utf-8")).get("wells", {})
+    except Exception:
+        return {}
+
+
+def _render_pdf_box_cloud(well_id: str | None, title_html: str) -> None:
+    f = _STATIC_DIR / "well_card" / "index.json"
+    idx = _cloud_pdf_index(f.stat().st_mtime if f.exists() else 0.0)
+    base = "/~/+/app/static"
+    if not well_id:
+        st.markdown(title_html + f'<div style="font-size:14px;color:{theme.COLOR_TEXT_TERTIARY};line-height:1.6;">관정을 선택하면 연도별 카드가 여기에 표시됩니다.</div>', unsafe_allow_html=True)
+        return
+    entry = idx.get(str(well_id).strip())
+    if not entry:
+        st.markdown(title_html + f'<div style="font-size:14px;color:{theme.COLOR_TEXT_TERTIARY};line-height:1.6;"><b>{well_id}</b> — 공개판은 <b>구좌읍 관정(2025 카드·주상도)</b>만 시연용으로 제공합니다.</div>', unsafe_allow_html=True)
+        return
+    chips = []
+    _chip = ('<a href="{href}" target="_blank" rel="noopener noreferrer" '
+             'style="display:inline-block;min-width:80px;text-align:center;'
+             'padding:4px 10px;margin:2px 4px 2px 0;'
+             f'background:{theme.COLOR_BG_INFO};color:{theme.COLOR_TEXT_INFO};'
+             f'border:0.5px solid {theme.COLOR_BORDER_INFO};border-radius:4px;'
+             'font-size:14px;font-weight:600;text-decoration:none;">{label}</a>')
+    if entry.get("2025"):
+        chips.append(_chip.format(href=f"{base}/well_card/{entry['2025']}", label="2025 카드"))
+    if entry.get("drill"):
+        chips.append(_chip.format(href=f"{base}/drilling_log/{entry['drill']}", label="주상도"))
+    st.markdown(title_html + "<div>" + "".join(chips) + "</div>", unsafe_allow_html=True)
+
+
 def render_well_card_pdf_box(well_id: str | None) -> None:
     """결과 표 우측 컬럼용 컴팩트 PDF 카드 박스.
 
@@ -166,6 +214,11 @@ def render_well_card_pdf_box(well_id: str | None) -> None:
         f'border-bottom:0.5px solid {theme.COLOR_BORDER_INFO};'
         f'padding-bottom:3px;margin-bottom:6px;">📄 관정카드 PDF</div>'
     )
+
+    # [공개판] Cloud: pdf_server 없음 → 동봉 static 자료(구좌읍) 전용 렌더러.
+    if _is_cloud():
+        _render_pdf_box_cloud(well_id, title_html)
+        return
 
     if not well_id:
         st.markdown(
