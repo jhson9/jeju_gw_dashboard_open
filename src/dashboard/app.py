@@ -42,6 +42,12 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 #  AppStaticFileHandler 는 .js 를 force text/plain 응답하므로 화이트리스트
 #  확장 + stderr 로 적용 확인 출력.
 # ──────────────────────────────────────────────────────────────────
+# [공개판] Streamlit Community Cloud 실행 여부 — UI 게이팅용 단일 플래그.
+#   (드론 helpers 의 is_cloud_env() 와 동일 판정이나, app.py 초기 구간에서
+#    무거운 import 없이 쓰기 위해 경량 버전을 별도 정의)
+from pathlib import Path as _Path
+IS_CLOUD = _Path("/mount/src").exists()
+
 try:
     import mimetypes
     # Windows mimetypes 누락 보강.
@@ -49,7 +55,11 @@ try:
     mimetypes.add_type("text/css", ".css")
     mimetypes.add_type("application/wasm", ".wasm")
 
+    # streamlit 1.56+ (starlette 서버) 는 확장자 화이트리스트가 제거되어
+    # 이 패치가 불필요 — 모듈 없으면 조용히 건너뜀 (Cloud 로그 소음 방지).
     from streamlit.web.server import app_static_file_handler as _ash
+    if not hasattr(_ash, "SAFE_APP_STATIC_FILE_EXTENSIONS"):
+        raise ImportError("modern streamlit — MIME patch 불필요")
     _before = set(_ash.SAFE_APP_STATIC_FILE_EXTENSIONS)
     _ash.SAFE_APP_STATIC_FILE_EXTENSIONS = tuple(
         _before | {".js", ".css", ".wasm", ".glb", ".gltf", ".bin", ".ktx2", ".ktx", ".svg"}
@@ -788,6 +798,10 @@ GROUPS: "list[tuple[str, list[str]]]" = [
         "⚙️ 데이터 관리",
     ]),
 ]
+# [공개판] Cloud: 데이터 관리 그룹 숨김 — 컨테이너 파일시스템이 휘발성이라
+# 수집/갱신이 의미 없고, 외부 API 대량 호출 위험만 있음. 로컬은 그대로.
+if IS_CLOUD:
+    GROUPS = [g for g in GROUPS if g[0] != "데이터 관리"]
 _GROUP_NAMES = [g[0] for g in GROUPS]
 
 # 🛡️ (검증팀 MINOR-2) Quit 체크를 radio/tabs 렌더 **이전**으로 이동 —
@@ -808,9 +822,11 @@ with _nav_cols[0]:
         key="main_group_nav", label_visibility="collapsed",
     )
 with _nav_cols[2]:
-    if st.button("⏹ Quit", use_container_width=True, key="main_quit_top",
-                 help="서버 종료 + 터미널 종료. 누르면 즉시 빠져나갑니다."):
-        _shutdown_and_exit()
+    # [공개판] Cloud: Quit 무의미 (서버 종료 권한 없음 + 다중 사용자) → 숨김.
+    if not IS_CLOUD:
+        if st.button("⏹ Quit", use_container_width=True, key="main_quit_top",
+                     help="서버 종료 + 터미널 종료. 누르면 즉시 빠져나갑니다."):
+            _shutdown_and_exit()
 GROUP_IDX = _GROUP_NAMES.index(active_group)
 _sub_tab_names = GROUPS[GROUP_IDX][1]
 
@@ -952,6 +968,11 @@ def _render_partial_data_banner(periods: dict, asos_df, base_date,
     m_p = periods.get("M", {})
     if not m_p.get("partial"):
         return  # 월별 분석이면 배너 불필요
+    # [공개판] Cloud: 수집 자료가 컨테이너 휘발성 → 재부팅 시 소실되고
+    # 기상청/water.jeju API 대량 호출 부담만 발생 → 배너·버튼 비표시.
+    if IS_CLOUD:
+        st.caption("ℹ️ 공개판은 저장소에 동봉된 자료(최종 수집일)까지 표시합니다 — 실시간 갱신은 로컬 설치판 전용.")
+        return
 
     import pandas as _pd
     from datetime import date as _date

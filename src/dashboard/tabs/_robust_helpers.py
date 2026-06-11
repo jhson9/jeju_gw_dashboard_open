@@ -121,13 +121,25 @@ def render_method_ref_buttons(key_prefix: str = "rb"):
     if not pdfs:
         return
 
+    # [공개판] Cloud: pdf_server(:8766) 없음 → repo 동봉 ASCII 사본을
+    # Streamlit static(/app/static/gw_ref/)으로 직접 링크.
+    #   (한글 파일명은 Cloud static 핸들러 percent-encoding 사고 이력이
+    #    있어 ASCII rename 사본 사용 — SKILL 패턴)
+    _CLOUD_STATIC_MAP = {
+        "260607_로버스트 베이지안 적용 가이드라인": "robust_bayes_infographic.pdf",
+        "260607_로버스트 베이지안 적용": "robust_bayes_detail.pdf",
+    }
+    from pathlib import Path as _P
+    _is_cloud = _P("/mount/src").exists()
+    _static_gw_ref = _P(__file__).resolve().parents[1] / "static" / "gw_ref"
+
     try:
         from src.dashboard import pdf_server
         src = pdf_server.DATA_SOURCES.get("gw_ref")
         url_base = src.url_base if src else ""
     except Exception:
         url_base = ""
-    if not url_base:
+    if not url_base and not _is_cloud:
         return
 
     # (2026-06-11 사용자 확정) 표시 라벨 매핑 — 미등록 파일은 stem 정리 폴백
@@ -143,7 +155,13 @@ def render_method_ref_buttons(key_prefix: str = "rb"):
             # "260607_xxx" → "xxx" (날짜 prefix 제거)
             if "_" in label and label.split("_")[0].isdigit():
                 label = label.split("_", 1)[1]
-        href = f"{url_base}/{quote(p.name, safe='')}"
+        if _is_cloud:
+            ascii_name = _CLOUD_STATIC_MAP.get(p.stem)
+            if not ascii_name or not (_static_gw_ref / ascii_name).exists():
+                continue  # ASCII 사본 없는 PDF 는 Cloud 에서 숨김
+            href = f"/app/static/gw_ref/{ascii_name}"
+        else:
+            href = f"{url_base}/{quote(p.name, safe='')}"
         chips.append(
             f'<a href="{href}" target="_blank" rel="noopener noreferrer" '
             f'style="display:inline-block;text-align:center;'

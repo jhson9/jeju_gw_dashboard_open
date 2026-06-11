@@ -139,6 +139,31 @@ def is_cloud_env() -> bool:
     return False
 
 
+_DRONE_STATIC_DIR = Path(__file__).resolve().parents[1] / "static" / "drone"
+
+
+def _mission_slug(m: Mission) -> str:
+    """미션 id 의 ASCII 부분만 추출 (Cloud static 한글 경로 사고 회피).
+
+    예: "2505_구좌덕천저수조" → "2505". 충돌 시 전체 id 폴백.
+    """
+    slug = "".join(ch for ch in m.id if ch.isascii() and (ch.isalnum() or ch in "-_"))
+    return slug.strip("_-") or m.id
+
+
+def preview_static_url(m: Mission) -> str | None:
+    """repo 동봉 static 사본(/app/static/drone/<slug>/preview.png) URL.
+
+    Streamlit enableStaticServing 이 메인 스크립트 옆 static/ 을 서빙하므로
+    data URI(수 MB) 대신 가벼운 URL 로 ImageOverlay 가능. 파일 없으면 None.
+    """
+    slug = _mission_slug(m)
+    f = _DRONE_STATIC_DIR / slug / "preview.png"
+    if f.exists():
+        return f"/app/static/drone/{slug}/preview.png"
+    return None
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _png_data_uri(path_str: str, mtime: float) -> str:
     """로컬 PNG → data URI (브라우저 직접 임베드). mtime 은 캐시 무효화 키."""
@@ -317,8 +342,8 @@ def diff_viewer_dod_inline_html(left: Mission, right: Mission,
                  / "static" / "drone_viewer" / "diff_viewer_dod.html")
     if not html_path.exists():
         return None
-    left_img = preview_data_uri(left)
-    right_img = preview_data_uri(right)
+    left_img = preview_static_url(left) or preview_data_uri(left)
+    right_img = preview_static_url(right) or preview_data_uri(right)
     if not left_img or not right_img:
         return None
 
@@ -527,8 +552,11 @@ def url_for_3d_viewer(tileset_url: str, lat: float, lon: float,
 
 
 def url_for_preview(m: Mission) -> str:
-    # [공개판] Cloud 에서는 pdf_server 가 없으므로 data URI 로 임베드.
+    # [공개판] Cloud: ① /app/static URL (가볍고 안정) ② data URI 폴백.
     if is_cloud_env():
+        url = preview_static_url(m)
+        if url:
+            return url
         uri = preview_data_uri(m)
         if uri:
             return uri

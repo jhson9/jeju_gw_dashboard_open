@@ -145,6 +145,18 @@ def render_chatbot(default_model: str = LLM_MODEL,
         if ok:
             st.session_state[_ok_key] = True
     if not ok:
+        # [공개판] Cloud: 챗봇 데이터(법령 PDF·벡터 인덱스)와 로컬 LLM(Ollama)
+        # 미동봉 — 설치 안내 대신 공개판 안내만 표시.
+        from pathlib import Path as _P
+        if _P("/mount/src").exists():
+            st.info(
+                "📦 **공개판 안내** — 지하수 법령 챗봇은 로컬 설치판 전용 기능입니다.\n\n"
+                "법령 PDF 24건·벡터 인덱스·로컬 LLM(EXAONE 3.5, Ollama)이 "
+                "공개 저장소에 포함되지 않아 Cloud 에서는 질의응답을 제공하지 않습니다. "
+                "화면 구성과 코드는 동일하며, 로컬 환경에서 `setup_chatbot.bat` "
+                "실행 시 완전 오프라인으로 동작합니다."
+            )
+            return
         st.warning(msg)
         st.info("설치 안내: 프로젝트 루트의 `setup_chatbot.bat` 실행 후 "
                 "아래 버튼 또는 새로고침으로 다시 점검하세요. "

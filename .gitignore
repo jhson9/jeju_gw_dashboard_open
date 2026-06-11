@@ -72,8 +72,8 @@ data/07_chatbot/
 # 산출 보고서
 data/reports/
 
-# 오프라인 지도 타일 캐시·JS 라이브러리 번들 (Cesium 등 230MB+)
-src/dashboard/static/map_tiles/
+# JS 라이브러리 번들 (Cesium 등 230MB+) — leaflet_offline 만 동봉
+# [V2.1.0] map_tiles(29MB) 는 Cloud 배경지도(zoom 10~14)용으로 **포함**으로 전환
 src/dashboard/static/libs/*
 !src/dashboard/static/libs/leaflet_offline/
 
