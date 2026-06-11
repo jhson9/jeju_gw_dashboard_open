@@ -159,7 +159,9 @@ def render_method_ref_buttons(key_prefix: str = "rb"):
             ascii_name = _CLOUD_STATIC_MAP.get(p.stem)
             if not ascii_name or not (_static_gw_ref / ascii_name).exists():
                 continue  # ASCII 사본 없는 PDF 는 Cloud 에서 숨김
-            href = f"/app/static/gw_ref/{ascii_name}"
+            # [V2.1.2] 새 탭 top-level 내비게이션은 SPA 셸이 가로채므로
+            # Cloud 프록시 경로로 직접 연결 (PDF Content-Type 정상 수신).
+            href = f"/~/+/app/static/gw_ref/{ascii_name}"
         else:
             href = f"{url_base}/{quote(p.name, safe='')}"
         chips.append(

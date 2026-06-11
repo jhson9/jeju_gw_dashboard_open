@@ -171,7 +171,9 @@ def preview_static_url(m: Mission) -> str | None:
     except Exception:
         host = ""
     if host:
-        return f"https://{host}/app/static/drone/{slug}/preview.png"
+        # [V2.1.2] iframe 은 service worker 제어 밖 → Cloud 프록시 경로
+        # (/~/+/) 를 직접 사용해야 실제 파일이 온다 (200 검증).
+        return f"https://{host}/~/+/app/static/drone/{slug}/preview.png"
     return None
 
 
@@ -378,7 +380,8 @@ def diff_viewer_dod_inline_html(left: Mission, right: Mission,
         "right_bounds":  _bounds_str(right),
         "right_label":   f"{right.name} · {right.flight_date}",
         "vworld_key":    vworld_key,
-        "host_8501":     "",
+        # [V2.1.2] viewer 의 V-World 로컬타일 base — Cloud 프록시 접두사
+        "host_8501":     "/~/+",
         "dod_img":       dod_png_url or "",
         "dod_bounds":    dod_bounds or "",
         "dod_opacity":   f"{float(dod_opacity):.3f}",

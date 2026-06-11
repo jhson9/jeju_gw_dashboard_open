@@ -37,6 +37,19 @@ import config
 # ==============================================================================
 _LOCAL_LIBS_BASE = "/app/static/libs/leaflet_offline"
 
+
+def static_url_base() -> str:
+    """[공개판 V2.1.2] 브라우저가 fetch 하는 /app/static 리소스의 base.
+
+    Streamlit Cloud 는 실제 앱을 `/~/+/` 프록시 뒤에서 서빙한다. 메인 페이지는
+    service worker 가 경로를 재작성해 주지만, **st_folium/components iframe 과
+    새 탭(PDF)** 은 SW 제어 밖이라 `/app/static/...` 이 앱 셸 HTML 로 떨어진다
+    (배경타일 회색·이미지 깨짐·PDF 미표시 사고 — 브라우저 네트워크 진단으로
+    `/~/+/app/static/...` 직접 GET 은 200 확인). → Cloud 에선 접두사를 붙인다.
+    """
+    from pathlib import Path as _P
+    return "/~/+/app/static" if _P("/mount/src").exists() else "/app/static"
+
 # folium 기본 CDN 자원 원본 보존 (최초 import 시 1회).
 _ORIG_MAP_JS = list(folium.Map.default_js)
 _ORIG_MAP_CSS = list(folium.Map.default_css)
@@ -346,14 +359,14 @@ def make_map(center: tuple[float, float] = (33.42, 126.55),
     # 를 활성화한다 (add_to 순서 무관). 일반을 default 로 강제하기 위해 위성에
     # show=False 를 명시. 사용자가 LayerControl 에서 위성으로 토글 시 즉시 전환.
     folium.TileLayer(
-        tiles="/app/static/map_tiles/Base/{z}/{x}/{y}.png",
+        tiles=f"{static_url_base()}/map_tiles/Base/{{z}}/{{x}}/{{y}}.png",
         attr=local_attr, name="V-World 일반", overlay=False, control=True,
         min_zoom=8, max_zoom=19,
         min_native_zoom=10, max_native_zoom=14,
         show=True,
     ).add_to(m)
     folium.TileLayer(
-        tiles="/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg",
+        tiles=f"{static_url_base()}/map_tiles/Satellite/{{z}}/{{x}}/{{y}}.jpeg",
         attr=local_attr, name="V-World 위성", overlay=False, control=True,
         min_zoom=8, max_zoom=19,
         min_native_zoom=10, max_native_zoom=14,

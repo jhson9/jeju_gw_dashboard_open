@@ -29,6 +29,7 @@ from src.drone import (
 from src.drone.preview import get_or_make_preview
 from src.drone.measure import polyline_distance, polygon_area_m2
 
+from src.dashboard.map_helpers import static_url_base as _static_base
 from src.dashboard.tabs._drone_helpers import (
     get_image_provider,
     get_registry,
@@ -460,13 +461,13 @@ def render() -> None:
     )
     local_attr = "ⓒ V-World (로컬 캐시)"
     folium.TileLayer(
-        tiles="/app/static/map_tiles/Base/{z}/{x}/{y}.png",
+        tiles=f"{_static_base()}/map_tiles/Base/{{z}}/{{x}}/{{y}}.png",
         attr=local_attr, name="V-World 일반", overlay=False, control=True,
         min_zoom=8, max_zoom=25, min_native_zoom=10, max_native_zoom=14,
         show=True,
     ).add_to(fmap)
     folium.TileLayer(
-        tiles="/app/static/map_tiles/Satellite/{z}/{x}/{y}.jpeg",
+        tiles=f"{_static_base()}/map_tiles/Satellite/{{z}}/{{x}}/{{y}}.jpeg",
         attr=local_attr, name="V-World 위성", overlay=False, control=True,
         min_zoom=8, max_zoom=25, min_native_zoom=10, max_native_zoom=14,
         show=False,
