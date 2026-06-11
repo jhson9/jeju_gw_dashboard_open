@@ -1,25 +1,16 @@
 # ==============================================================================
-#  src/dashboard/.streamlit/config.toml — 대시보드 진입점(app.py) 옆 안전망 설정
+#  src/dashboard/.streamlit/config.toml — app.py 옆 안전망 설정 (공개판)
 # ------------------------------------------------------------------------------
-#  복구 사유 (2026-06-08):
-#    2026-06-07 정리(batch2, MOVE_LOG 항목 4)에서 이 파일이 "중복"으로 판단돼
-#    아카이브로 이동됨. 그러나 streamlit 은 실행 위치(cwd)의 .streamlit/ 만
-#    프로젝트 config 로 읽으므로, 정식 런처(cwd=프로젝트 루트)가 아닌 방식
-#    (예: VS Code 의 'Run Python File', src/dashboard 안에서 직접 실행)으로
-#    띄우면 루트 config 가 적용되지 않아 enableStaticServing 이 꺼진다.
-#    → /app/static/map_tiles/... 타일이 404 → ④·⑪·⑫·⑬ 탭 지도가 안 뜸.
-#    이 파일은 app.py 옆에 있어 어떤 실행 방식이든 static 서빙을 보장한다.
-#
-#  ⚠️ 포트: 옛 파일은 8501(예약범위 충돌) 이었으나 18501(루트 config 와 동일)
-#     로 정정. 단, 정식 런처는 항상 --server.port 를 명시 전달하므로 이 값은
-#     런처 경유 시 무시되고, 직접 실행 시에만 기본값으로 쓰인다.
+#  [Cloud 장애 fix 2026-06-11 V2.0.2]
+#  Streamlit 은 "실행 스크립트 옆"의 .streamlit/config.toml 을 읽는다
+#  (샌드박스 재현으로 확인). 기존 port=18501 + address=127.0.0.1 이
+#  Cloud health check(localhost:8501) 실패 → "Oh no" 부팅 실패의 원인.
+#  → port/address 제거. Cloud 는 기본 8501, 로컬 런처는 --server.port
+#    CLI 명시 전달(CLI > config)이라 양쪽 모두 정상.
 # ==============================================================================
 [server]
-port = 18501
 headless = true
-address = "127.0.0.1"
 runOnSave = true
-# 핵심: 부모 config 상속에 의존하지 말고 여기서도 명시 — cwd 무관 보장.
 # 루트 static/ (실제 src/dashboard/static/) 을 /app/static/ 으로 노출.
 enableStaticServing = true
 
